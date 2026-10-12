@@ -13,11 +13,13 @@ import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
 import type { Logger } from "pino";
 import { registerEvidenceTools } from "./registerEvidenceTools.js";
 import { artifactInspectionResultSchema } from "../domain/artifactInspection.js";
+import type { ArtifactPathAnalysisService } from "../application/artifacts/ArtifactPathAnalysisService.js";
 
 /** Register deterministic artifact inventory and safe extraction operations. */
 export const registerArtifactTools = (
   server: EvidenceMcpServer,
   options: {
+    readonly pathAnalysis: ArtifactPathAnalysisService;
     readonly logger: Logger;
     readonly activeTarget: (() => BinaryTarget | undefined) | undefined;
     readonly recordEvidence: EvidenceWriter["recordEvidence"] | undefined;
@@ -27,11 +29,33 @@ export const registerArtifactTools = (
 ): void => {
   registerEvidenceTools(server, ARTIFACT_TOOL_CONTRACTS, {
     ...options,
+    analysisForAdmission: (analysis) => ({
+      execute: (operation, parameters, executionOptions) => {
+        if (
+          operation === "inspect_artifact" &&
+          typeof parameters.input_path === "string"
+        ) {
+          const { input_path, ...inventoryParameters } = parameters;
+          return options.pathAnalysis.inspect(
+            input_path,
+            inventoryParameters,
+            executionOptions,
+          );
+        }
+        return analysis.execute(operation, parameters, executionOptions);
+      },
+    }),
     parametersForExecution: (operation, parameters) => {
       if (operation === "inspect_artifact") {
-        const { detail: _detail, ...execution } =
-          artifactInspectionInputSchema.parse(parameters);
-        return execution;
+        const {
+          detail: _detail,
+          input_path,
+          ...execution
+        } = artifactInspectionInputSchema.parse(parameters);
+        return {
+          ...execution,
+          ...(input_path === undefined ? {} : { input_path }),
+        };
       }
       return operation === "extract_artifact"
         ? { ...parameters, output_root: createArtifactExtractionDestination() }

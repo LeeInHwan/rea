@@ -45,6 +45,7 @@ import { silentLogger } from "../logger.js";
 import type { Logger } from "pino";
 import { registerApplicationTools } from "./registerApplicationTools.js";
 import { registerArtifactTools } from "./registerArtifactTools.js";
+import { createArtifactPathAnalysis } from "../composition/artifactPath.js";
 import { registerBrowserScenarioTool } from "./registerBrowserScenarioTool.js";
 import { registerBrowserTools } from "./registerBrowserTools.js";
 import { registerWebScriptTool } from "./registerWebScriptTool.js";
@@ -603,6 +604,7 @@ interface ServerToolContext extends ReturnType<typeof createSessionRecorders> {
 const registerBinaryAnalysisTools = ({
   server,
   session,
+  environment,
   logger,
   activeTarget,
   recordEvidence,
@@ -643,7 +645,11 @@ const registerBinaryAnalysisTools = ({
     withAdmittedAnalysis,
   };
   registerEvidenceTools(server, NATIVE_TOOL_CONTRACTS, evidenceOptions);
-  registerArtifactTools(server, { ...evidenceOptions, evidenceById });
+  registerArtifactTools(server, {
+    ...evidenceOptions,
+    evidenceById,
+    pathAnalysis: createArtifactPathAnalysis(environment),
+  });
   registerManagedTools(server, evidenceOptions);
   if (session !== undefined)
     registerManagedWorkflowTools(server, {

@@ -17,6 +17,76 @@ import { ArtifactProvider } from "../../../src/artifacts/ArtifactProvider.js";
 import { ARTIFACT_COMPARISON_EXAMPLE } from "../../../src/contracts/artifactComparisonExample.js";
 import { createServer } from "../../../src/server/createServer.js";
 import { observed } from "../../fixtures/analysisExecution.js";
+import { artifactInspectionResultSchema } from "../../../src/domain/artifactInspection.js";
+
+it("inspects an installation folder through MCP without an active binary and retains its evidence", async () => {
+  const root = await createTestTempDirectory("rea-installation-mcp-");
+  const app = join(root, "Installed App");
+  await mkdir(app);
+  await writeFile(
+    join(app, "Main"),
+    Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0, 0, 1]),
+  );
+  const session = createTestBinarySession(new ArtifactProvider({}));
+  const server = createServer(
+    { kind: "session", session },
+    { environment: {} },
+  );
+  const client = new Client({ name: "installation-path-test", version: "1" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  try {
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const result = await client.callTool({
+      name: "inspect_artifact",
+      arguments: { input_path: app },
+    });
+    expect(result.isError, JSON.stringify(result.structuredContent)).not.toBe(
+      true,
+    );
+    const evidence = parseEvidence(result.structuredContent);
+    expect(evidence.subject?.local_path).toBe(app);
+    const inspection = artifactInspectionResultSchema.parse(
+      evidence.normalized_result,
+    );
+    expect(inspection.next_probes.map((probe) => probe.operation)).toEqual([
+      "open_binary",
+    ]);
+    const summary = await client.callTool({
+      name: "inspect_artifact",
+      arguments: { input_path: app, detail: "summary" },
+    });
+    expect(summary.isError, JSON.stringify(summary.structuredContent)).not.toBe(
+      true,
+    );
+    const missing = await client.callTool({
+      name: "inspect_artifact",
+      arguments: { input_path: join(root, "missing") },
+    });
+    expect(missing.isError).toBe(true);
+    const recovered = await client.callTool({
+      name: "inspect_artifact",
+      arguments: { input_path: app },
+    });
+    expect(recovered.isError).not.toBe(true);
+    expect(session.activeTarget()).toBeUndefined();
+    const active = join(root, "active.zip");
+    const zip = new ZipWriter(new Uint8ArrayWriter());
+    await zip.add("asset.txt", new TextReader("active session"));
+    await writeFile(active, await zip.close());
+    expect((await session.open(active)).ok).toBe(true);
+    const previousTarget = session.activeTarget();
+    const separate = await client.callTool({
+      name: "inspect_artifact",
+      arguments: { input_path: app },
+    });
+    expect(separate.isError).not.toBe(true);
+    expect(session.activeTarget()).toEqual(previousTarget);
+  } finally {
+    await Promise.allSettled([client.close(), server.close(), session.close()]);
+  }
+});
 
 const integrityMessage = (unpacked: boolean): string =>
   `${

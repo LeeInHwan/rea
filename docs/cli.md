@@ -267,3 +267,29 @@ REA's failure status:
 set -o pipefail
 rea inspect-artifact ./app.asar --json | jq . > inspection.json
 ```
+
+## Inspect installed applications and folders
+
+For this personal fork's Korean usage guide, see [개인 포크 안내](personal-fork-ko.md).
+
+`inspect-artifact` accepts a file, an installed `.app`, or an ordinary installation
+directory. It inventories the selected path without resolving a bundle's main
+executable or starting a native analysis engine:
+
+```sh
+rea inspect-artifact '/Applications/Example.app' --json
+rea inspect-artifact '/path/to/Windows Installation' --json
+rea inspect-artifact '/path/to/Example.dmg' --json
+rea inspect-artifact '/path/to/Example.apk' --json
+```
+
+The equivalent MCP call is `inspect_artifact` with `input_path`. Omitting that
+field preserves inspection of the active binary session. Explicit path inspection
+does not replace an active native target; `detail: "summary"` also works with a path.
+
+Follow `next_probes` using files identified in the retained inventory. Native
+executables, PE managed metadata, JavaScript/ASAR, and APKs get their corresponding
+analysis routes. Embedded archive members need extraction before native analysis.
+File extensions alone do not establish native code, and folders without observed
+JavaScript are not automatically routed to JavaScript analysis. Suggested probes
+are unexecuted work, not proof that an optional analysis engine is installed.

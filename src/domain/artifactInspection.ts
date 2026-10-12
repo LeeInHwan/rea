@@ -297,8 +297,65 @@ const contradictions = (
 const probesFor = (
   inventory: ArtifactInventoryResult,
 ): ArtifactInspectionResult["next_probes"] => {
-  const format = inventory.manifest.root_format;
-  if (["asar", "javascript-bundle", "directory"].includes(format))
+  const rootFormat = inventory.manifest.root_format;
+  const probes = new Map(
+    probesForFormat(rootFormat).map((probe) => [probe.operation, probe]),
+  );
+  // Consume the inventory's classifications rather than guessing from the
+  // supplied folder name or re-reading file headers. Unread and linked entries
+  // cannot establish a next analysis target.
+  const childFormats = uniqueSorted(
+    inventory.occurrences
+      .filter(
+        (entry) =>
+          entry.parent_occurrence_id !== null &&
+          entry.artifact_id !== null &&
+          !entry.encrypted &&
+          (entry.hash_status === "verified" ||
+            entry.hash_status === "mismatched") &&
+          (entry.entry_kind === "file" || entry.entry_kind === "slice"),
+      )
+      .map((entry) => entry.artifact_format),
+  );
+  let needsExtraction = false;
+  for (const format of childFormats) {
+    // Plists remain in the inventory; the next step here is application code.
+    if (format === "plist") continue;
+    for (const probe of probesForFormat(format)) {
+      if (probes.has(probe.operation)) continue;
+      const embedded = rootFormat !== "directory";
+      needsExtraction ||= embedded;
+      probes.set(probe.operation, {
+        ...probe,
+        rationale: `${embedded ? "Extract the container, then select" : "Select"} matching files from the retained inventory; extract nested containers first when their files are embedded. Do not pass the enclosing container as a binary. ${probe.rationale}`,
+      });
+    }
+  }
+  // Managed classification must precede native opening in mixed app trees.
+  const nativeProbe = probes.get("open_binary");
+  if (nativeProbe !== undefined) {
+    probes.delete("open_binary");
+    probes.set("open_binary", nativeProbe);
+  }
+  return [
+    ...(needsExtraction
+      ? [
+          {
+            operation: "extract_artifact",
+            rationale:
+              "Materialize embedded analysis targets into a separate output directory without executing them; use returned paths for follow-up analysis.",
+            authority: "artifact-bytes" as const,
+          },
+        ]
+      : []),
+    ...probes.values(),
+  ];
+};
+
+const probesForFormat = (
+  format: string,
+): ArtifactInspectionResult["next_probes"] => {
+  if (["asar", "javascript-bundle"].includes(format))
     return [
       {
         operation: "analyze_javascript_application",
@@ -318,7 +375,7 @@ const probesFor = (
       {
         operation: "open_binary",
         rationale:
-          "Open as native code only when managed inspection reports a native or mixed boundary.",
+          "Bind a deep native provider to an inventoried executable. For PE files, check managed metadata first and use native analysis for native or mixed code.",
         authority: "native-analysis-provider",
       },
     ];
@@ -337,6 +394,15 @@ const probesFor = (
         operation: "inspect_plist",
         rationale: "Parse property-list values without executing the artifact.",
         authority: "artifact-bytes",
+      },
+    ];
+  if (format === "apk")
+    return [
+      {
+        operation: "inspect_android_package",
+        rationale:
+          "Use the configured headless JADX engine and a full JDK to inspect the APK manifest, permissions, and class inventory without running the app. APK naming and ZIP structure alone do not establish a valid Android package.",
+        authority: "managed-static-analysis",
       },
     ];
   return [];

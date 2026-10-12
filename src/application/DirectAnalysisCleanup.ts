@@ -10,7 +10,7 @@ import { analysisErrorWithCleanupFailure } from "../domain/analysisErrorCleanup.
 
 /** Await one-shot cleanup and retain either the outcome or both failures. */
 export const withSessionCleanup = async <Value>(
-  session: BinarySession,
+  session: Pick<BinarySession, "close">,
   operation: () => Promise<Value>,
   onCleanupFailure: (value: Value, error: AnalysisError) => Value,
 ): Promise<Value> => {
@@ -72,8 +72,8 @@ export const directAnalysisCleanupFailure = (
   };
 };
 
-/** Preserve managed observations or the original typed failure in diagnostics. */
-export const managedAnalysisCleanupFailure = (
+/** Preserve provider observations or the original typed failure in diagnostics. */
+export const analysisExecutionCleanupFailure = (
   result: Result<AnalysisExecution, AnalysisError>,
   error: AnalysisError,
 ): Result<AnalysisExecution, AnalysisError> => {

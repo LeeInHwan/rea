@@ -18,6 +18,13 @@ export const artifactInventoryInputSchema = z.strictObject({
 /** Delivery selection belongs to the adapter, not the inventory producer. */
 export const artifactInspectionInputSchema =
   artifactInventoryInputSchema.extend({
+    input_path: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Inspect this file, installed app, or installation directory without opening a binary. Omit to inspect the active target.",
+      ),
     detail: analysisDetailSchema
       .unwrap()
       .optional()
@@ -79,7 +86,7 @@ const artifact = <
 export const ARTIFACT_TOOL_CONTRACTS = [
   artifact(
     "inspect_artifact",
-    "Inspect an active archive or application package in one call. By default returns the complete content-addressed artifact graph once, as the typed nested inventory Evidence, with root and integrity observations, integrity contradictions, hypotheses, unexplored branches, limitations, and next probes inline. Optional detail summary retains the complete inspection and returns its derived summary view; read exact paths or inventory pages with inspect_analysis_view using parent_evidence_id. This changes delivery, not inventory coverage. Read-only DMG mounting is used automatically on supported macOS hosts. Integrity mismatches fail by default; record-and-continue keeps mismatches explicitly untrusted. It does not extract files; use extract_artifact to materialize its regular contents.",
+    "Inspect a caller-selected input_path (file, installed app, or installation directory), or omit input_path to inspect the active archive or application package. Path inspection does not change the active binary session. By default returns the complete content-addressed artifact graph once, as the typed nested inventory Evidence, with root and integrity observations, integrity contradictions, hypotheses, unexplored branches, limitations, and next probes inline. Optional detail summary retains the complete inspection and returns its derived summary view; read exact paths or inventory pages with inspect_analysis_view using parent_evidence_id. This changes delivery, not inventory coverage. Read-only DMG mounting is used automatically on supported macOS hosts. Integrity mismatches fail by default; record-and-continue keeps mismatches explicitly untrusted. It does not extract files; use extract_artifact to materialize its regular contents.",
     artifactInspectionInputSchema,
   ),
   artifact(

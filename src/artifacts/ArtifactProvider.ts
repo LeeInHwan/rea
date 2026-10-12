@@ -10,7 +10,7 @@ import {
 } from "../application/AnalysisProvider.js";
 import { inspectBundleKeyedArchive } from "./apple/KeyedArchiveReader.js";
 import { traceDylibResolution } from "./apple/DylibResolutionReader.js";
-import { basename, dirname } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { inventoryArtifact } from "./inventory/ArtifactInventory.js";
 import { extractArtifact } from "./extraction/ArtifactExtraction.js";
 import { analyzeInterfaceBuilderBundle } from "./apple/InterfaceBuilderAnalysis.js";
@@ -69,13 +69,28 @@ export class ArtifactProvider implements AnalysisProvider {
   createClient(target: BinaryTarget): AnalysisClient {
     return new ArtifactClient(target, this.environment, this.#platform);
   }
+
+  /** Inventory owns path admission and content identity for unopened folders. */
+  createPathClient(path: string): AnalysisClient {
+    return new ArtifactClient(
+      { kind: "artifact-path", path: resolve(path) },
+      this.environment,
+      this.#platform,
+    );
+  }
 }
 
 class ArtifactClient implements AnalysisClient {
   readonly #resourceScope = new ArtifactResourceScope();
 
   constructor(
-    private readonly target: BinaryTarget,
+    private readonly target:
+      | BinaryTarget
+      | {
+          readonly kind: "artifact-path";
+          readonly path: string;
+          readonly sourcePath?: never;
+        },
     private readonly environment: Readonly<NodeJS.ProcessEnv>,
     private readonly platform: NodeJS.Platform,
   ) {}
@@ -100,6 +115,11 @@ class ArtifactClient implements AnalysisClient {
         const inspected = await this.inspectArtifact(parameters, options);
         return inspected;
       }
+      if (this.target.kind === "artifact-path")
+        throw this.unsupportedTarget(
+          operation,
+          "Unopened paths support inspect_artifact only.",
+        );
       if (operation === "decode_interface_builder") {
         if (
           this.target.kind !== "executable" ||

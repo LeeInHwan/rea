@@ -1,6 +1,7 @@
 import { snapshotEnvironment } from "../process/snapshotEnvironment.js";
 import { parseConfig } from "../config/parseConfig.js";
 import type { DirectAnalysisDependencies } from "../application/DirectAnalysisDependencies.js";
+import { createArtifactPathAnalysis } from "./artifactPath.js";
 
 type DirectAnalysisRuntime = typeof import("../application/DirectAnalysis.js");
 type DirectAnalysisStatusRuntime =
@@ -39,6 +40,13 @@ export const createDirectAnalysis = (
   const runProviderAnalysis: BoundOperation<
     DirectAnalysisRuntime["runProviderAnalysis"]
   > = async (...args) => {
+    const [path, tool, parameters, , signal] = args;
+    if (tool === "inspect_artifact")
+      return createArtifactPathAnalysis(environment).inspectEvidence(
+        path,
+        parameters,
+        signal,
+      );
     const { runProviderAnalysis } =
       await import("../application/DirectAnalysis.js");
     return runProviderAnalysis(dependencies, ...args);

@@ -46,9 +46,13 @@ explicit path or endpoint and do not need it.
 
 - ASAR or extracted JavaScript/Electron tree:
   `analyze_javascript_application`.
-- Archive/package member inventory (ZIP/APK/IPA/MSIX/AppX or DMG):
-  `open_binary` with the supplied local path; use `inspect_artifact` when its
-  graph and findings help answer the question.
+- Installed app/folder or archive/package member inventory (ZIP/APK/IPA/MSIX/AppX or DMG):
+  call `inspect_artifact` with `input_path` when the server advertises that field.
+  This retains the inventory without opening or changing a native target. Follow
+  `next_probes` using the actual inventoried file paths; extract embedded members
+  before opening their native binaries. On older servers, use `open_binary` for
+  supported app bundles and archives; ordinary installation folders require the
+  path-based route. Do not assume that every folder is a JavaScript application.
 - Android APK code, classes, methods, or incoming references:
   `inspect_android_package`, then focused Android tools when advertised.
   Archive member inventory still uses the archive route above.
