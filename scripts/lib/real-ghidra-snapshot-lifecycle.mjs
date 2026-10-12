@@ -40,7 +40,12 @@ export async function verifyGhidraSnapshotLifecycle(
       "evidence_integrity_mismatch",
       JSON.stringify(reply),
     );
-    assert.match(error.message, /after analysis metadata mutations/u);
+    assert.match(
+      error.message,
+      name === "open_binary"
+        ? /^Analysis snapshots cannot be imported because analysis metadata may have changed\./u
+        : /^Analysis snapshots are unavailable because analysis metadata may have changed\./u,
+    );
     assert.match(
       error.remediation.action,
       /close.*without saving a snapshot/iu,
