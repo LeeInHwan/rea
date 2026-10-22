@@ -70,10 +70,12 @@ jobs:
       - run: npm run build:cached
         id: build
       - name: Real native ownership and descendant cleanup conformance
-        run: node scripts/verify-windows-native.mjs . .cache/personal-windows/process-boundary.exe windows-native-proof.json
+        run: node scripts/verify-windows-native.mjs . (Resolve-Path .cache/personal-windows/process-boundary.exe).Path windows-native-proof.json
       - name: Workbench CLI and MCP on Windows
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node --test personal/workbench/workbench.test.mjs
       - name: Execute native PE cases, reject changed behavior, and verify lifecycle
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node personal/workbench/windows-execution-proof.mjs .cache/personal-windows/original.exe .cache/personal-windows/changed.exe windows-execution-proof.json
       - name: Recover entire managed project and compare live Windows UI
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
