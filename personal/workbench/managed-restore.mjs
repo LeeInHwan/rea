@@ -65,18 +65,56 @@ export function inspectRecoveredProject(xml) {
     )
   )
     throw new Error("Unsupported recovered SDK");
+  const allowed = new Set([
+    "Project",
+    "PropertyGroup",
+    "ItemGroup",
+    "TargetFramework",
+    "OutputType",
+    "LangVersion",
+    "AllowUnsafeBlocks",
+    "CheckForOverflowUnderflow",
+    "GenerateAssemblyInfo",
+    "GenerateTargetFrameworkAttribute",
+    "EnableDefaultItems",
+    "UseWindowsForms",
+    "UseWPF",
+    "ApplicationIcon",
+    "RootNamespace",
+    "AssemblyName",
+    "Reference",
+    "EmbeddedResource",
+    "Compile",
+    "None",
+    "LogicalName",
+    "DependentUpon",
+    "Nullable",
+    "ImplicitUsings",
+  ]);
+  const unsafePath =
+    /\$\(|@\(|%\(|(?:^|[\\/])\.\.(?:[\\/]|$)|^[\\/]|^[A-Za-z]:/;
   for (const element of Array.from(doc.getElementsByTagName("*"))) {
+    if (!allowed.has(element.tagName))
+      throw new Error(
+        `Unsupported recovered project element: ${element.tagName}`,
+      );
     for (const attribute of Array.from(element.attributes)) {
-      if (attribute.name === "Sdk") continue;
+      if (element.tagName === "Project" && attribute.name === "Sdk") continue;
       if (
-        /\$\(|@\(|%\(|(?:^|[\\/])\.\.(?:[\\/]|$)|^[\\/]|^[A-Za-z]:/.test(
-          attribute.value,
-        )
+        !["Include", "Remove", "Update"].includes(attribute.name) ||
+        unsafePath.test(attribute.value)
       )
         throw new Error(
           "Recovered project contains an external or evaluated item path",
         );
     }
+    if (
+      !Array.from(element.childNodes).some((node) => node.nodeType === 1) &&
+      unsafePath.test(element.textContent.trim())
+    )
+      throw new Error(
+        "Recovered project contains an external or evaluated property value",
+      );
   }
   for (const name of [
     "Import",
@@ -172,7 +210,29 @@ export async function restoreManaged(input, state, inventory, signal) {
   const record = () =>
     writeFile(join(output, "recovery.json"), json(receipt), { mode: 0o600 });
   const run = async (step, command, args) => {
-    const result = await owned(command, args, output, input.timeout_ms, signal);
+    let result;
+    try {
+      result = await owned(command, args, output, input.timeout_ms, signal);
+    } catch (error) {
+      const log = `${step}-failure.json`;
+      const bytes = json({
+        command,
+        arguments: args,
+        error: error.message,
+        snapshot: error.snapshot ?? null,
+        resources: error.resources ?? null,
+      });
+      await writeFile(join(output, log), bytes, { mode: 0o600 });
+      receipt.commands.push({
+        step,
+        command,
+        arguments: args,
+        error: error.message,
+        log,
+        log_sha256: sha256(bytes),
+      });
+      throw error;
+    }
     const log = `${step}.json`;
     const bytes = json({ command, arguments: args, result });
     await writeFile(join(output, log), bytes, { mode: 0o600 });
@@ -236,6 +296,7 @@ export async function restoreManaged(input, state, inventory, signal) {
       "-p:EnableWindowsTargeting=true",
       "-p:UseSharedCompilation=false",
       "-nodeReuse:false",
+      "-noAutoResponse",
     ]);
     receipt.rebuilt_files = await treeFiles(rebuilt);
     if (!receipt.rebuilt_files.some((file) => file.path.endsWith(".dll")))

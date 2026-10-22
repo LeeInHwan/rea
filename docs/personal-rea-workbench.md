@@ -1,4 +1,4 @@
-# Personal REA Workbench 0.1
+# Personal REA Workbench 0.2
 
 ## 제품 구조와 조사 결과
 
@@ -55,7 +55,12 @@ flowchart LR
    checkpoint로 가져와 behavioral claim으로 지정하는 방식이다.
 7. `project_resume`: 원본을 재검사해 해시와 inventory manifest를 확인하고 저장된
    Evidence를 새 REA 세션에 복원한다. 디버거·프로세스·마운트 자체를 재개하지 않는다.
-8. `project_export`: `project.json`, `evidence.json`, `plan.json`과 SHA-256 manifest를
+8. `restore_managed_application`: 등록된 원본 설치 폴더의 .NET 실행 assembly 하나를
+   고정 ILSpy 11.1.0.9782로 C# 프로젝트와 내장 리소스로 복원하고 dotnet으로 빌드한다.
+   도구 실행 파일의 절대 경로를 호출자가 지정한다. 자동 설치하지 않는다. 원본 DLL,
+   복원 소스, 빌드 결과, 도구와 로그의 해시를 Evidence로 기록한다. 결과는
+   `rebuilt`, `behavior: not-run`이며 앱의 동작 일치를 선언하지 않는다.
+9. `project_export`: `project.json`, `evidence.json`, `plan.json`과 SHA-256 manifest를
    새 폴더에 저장한다. 패키지는 계약과 근거이며 실행 가능한 재구현 코드가 아니다.
 
 원본이 바뀌면 별도 프로젝트를 만들어 버전을 비교한다. 과거 증거를 새 버전의
@@ -149,8 +154,7 @@ node --test personal/workbench/workbench.test.mjs personal/workbench/update.test
 실제 core MCP/CLI를 사용하는 테스트는 원본·후보 폴더, 해시 결합, pass/fail/unknown,
 체크포인트 재개, 변조 거부, 변경된 원본 거부, 패키지 hash, lock 경합을 검증한다.
 실제 Git 테스트는 dirty/main 변경과 검사 실패 시 승격하지 않는지 확인한다.
-CI에 Linux/macOS Workbench 계약 검사를 별도로 추가했다. Windows 런타임과
-전체 앱 재구현은 이 검증의 범위가 아니다. 자동 업데이트의 로컬 통과는
+CI에 Linux/macOS Workbench 계약 검사를 별도로 추가했다. Windows 실행과 앱 복원은 별도의 Windows 전용 workflow에서 검사한다. 자동 업데이트의 로컬 통과는
 GitHub 전체 CI나 모든 외부 제공자 검증 통과를 뜻하지 않는다.
 
 다음 개발은 실제 사용 대상의 기능 하나를 골라 원본 입력·출력 사례를 수집하고,
@@ -158,3 +162,49 @@ Codex로 후보 모듈을 구현해 behavioral claims를 통과시키는 수직 
 진행한다. 이후 생성한 소스와 빌드 환경을 패키지에 결합하고, 반복 실패의 반례
 축소, 순환 의존성 그룹 처리, 저장 공간 압축을 확장한다. 이 순서를 거쳐야
 네이티브 앱·APK에서 확인하지 않은 자동 복구 능력을 과장하지 않으면서 발전시킬 수 있다.
+
+## Windows 앱 복원 및 실행 검증
+
+`Personal REA Windows Execution`은 실제 Windows Server 2022 x64 runner에서 실행한다.
+WSL이나 모의 프로세스 결과를 Windows 실행 증거로 사용하지 않는다.
+
+- 네이티브 EXE: 원본과 변경본의 다섯 입력 결과, 비정상 종료, 시간 초과, 취소,
+  Windows Job Object의 자식 프로세스 정리와 무관한 프로세스 보존을 검사한다.
+- 관리형 앱: 저장소 소유 WinForms 참조 앱을 컴파일한 DLL만 복원 도구에 전달한다.
+  ILSpy로 전체 C# 프로젝트를 복원하여 다시 빌드하고, UI Automation으로 원본과
+  복원 앱의 정수·소수 계산, 잘못된 입력, overflow, 초기화, 저장·재시작·한글 로드를 비교한다.
+  복원 앱 실행 시 원본 배포 폴더와 입력 DLL을 원래 경로에서 치운다.
+  계산을 뺄셈으로 바꾼 별도 앱이 비교에 실패하는지도 검사한다.
+- 복원 Evidence와 GUI 비교 보고서는 구분한다. GUI 검사 결과는 CI 검증 보고서이며
+  기존 `feature_verify`의 canonical process capture로 변환하지 않는다.
+- 기존 REA의 `capture_process_scenario`는 Windows PTY를 지원하지 않는다.
+  이 경로가 지원되지 않는다는 응답도 검사한다.
+
+첫 복원 경로는 **단일 .NET 실행 assembly 및 내장 리소스**에 한정한다.
+외부 application DLL 참조, 패키지 의존성, 임의 MSBuild 작업은 거부한다.
+네이티브 C/C++ 앱, 드라이버, 다중 DLL 앱, Electron, APK의 범용 전체 복원은
+완료하지 않았다. 원본의 주석·변수명·모든 가능한 동작도 복구했다고 주장하지 않는다.
+사용자 지정 실제 앱의 설치·업데이트·네트워크·권한별 시나리오는 별도 검증 대상이다.
+
+Windows에서 CLI 입력 파일 예:
+
+```json
+{
+  "project": "C:/rea/project",
+  "assembly_path": "C:/apps/Example/Example.dll",
+  "output_directory": "C:/rea/new-recovery",
+  "ilspy_command": "C:/tools/ilspy/ilspycmd.exe",
+  "dotnet_command": "C:/Program Files/dotnet/dotnet.exe",
+  "timeout_ms": 300000
+}
+```
+
+`rea-workbench restore_managed_application @input.json`을 실행한다.
+원본은 앞서 `project_create`로 등록해야 하고 출력 폴더는 새 경로여야 한다.
+복원된 프로그램 실행은 이 도구가 자동으로 하지 않는다. Windows 검증은
+`managed-restore-proof.mjs`와 `managed-ui-proof.ps1`의 참조 앱 시나리오에서 수행한다.
+복원/빌드 실패 시 출력 폴더의 `recovery.json`과 단계 로그를 보존한다.
+
+공식 버전 자동 업데이트의 로컬 qualification에는 복원 프로젝트 경계 검사가
+포함된다. 원격 Windows GUI CI는 별도 검사이므로, 로컬 업데이트 통과만으로
+Windows 재검증까지 완료했다고 보지 않는다.
