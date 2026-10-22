@@ -192,7 +192,7 @@ test("real workbench stdio MCP advertises validated schemas and preserves CLI pa
       }),
     );
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 8);
+    assert.equal(tools.length, 9);
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, "object");
       assert.ok(tool.inputSchema.required.includes("project"));

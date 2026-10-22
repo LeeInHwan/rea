@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { reconstructionSpecificationSchema } from "../../dist/domain/reconstructionVerificationSchemas.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 const path = z.string().min(1);
 const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -26,6 +26,14 @@ export const contracts = {
   }),
   project_plan: z.strictObject({ project: path }),
   project_export: z.strictObject({ project: path, destination: path }),
+  restore_managed_application: z.strictObject({
+    project: path,
+    assembly_path: path,
+    output_directory: path,
+    ilspy_command: path,
+    dotnet_command: path,
+    timeout_ms: z.number().int().positive().max(900000).default(300000),
+  }),
 };
 export const descriptions = {
   project_create:
@@ -44,6 +52,8 @@ export const descriptions = {
     "Return compact ready, blocked, verified, missing-dependency and cycle diagnostics. Uses retained evidence; does not claim the target is currently unchanged.",
   project_export:
     "Export an immutable contract/evidence package into a new directory. Includes hashes, verification limitations and history snapshot; not original binary bytes or reconstructed source.",
+  restore_managed_application:
+    "Recover an entire single-assembly managed .NET application as a C# project using caller-supplied ILSpy 11.1.0.9782, then rebuild with caller-supplied dotnet. Both tools execute under the core owned-process supervisor. Original assembly must belong to this project. Writes a new output directory, pins tool/input/source/output hashes and retains command logs. Rebuilt does not mean behavior verified. Native-only EXE, multi-assembly deployment recovery and arbitrary app equivalence are unsupported. No automatic tool installation or target launch.",
 };
 
 export const stateSchema = z.strictObject({

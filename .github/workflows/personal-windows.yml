@@ -1,0 +1,91 @@
+name: Personal REA Windows Execution
+
+on:
+  push:
+    branches: [main, "feat/personal-rea-*", "feat/app-reconstruction-*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: "0"
+
+jobs:
+  build-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Install cross compiler on disposable runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y g++-mingw-w64-x86-64
+      - run: npm run build:windows-native
+      - run: npm run verify:windows-native:artifact
+      - name: Build independent owned Windows executables
+        run: |
+          mkdir -p .cache/personal-windows
+          x86_64-w64-mingw32-g++ -municode -std=c++17 -O2 -static -Wall -Wextra -o .cache/personal-windows/process-boundary.exe tests/fixtures/windows/processBoundary.cc -ladvapi32
+          x86_64-w64-mingw32-g++ -std=c++17 -O2 -static -Wall -Wextra -o .cache/personal-windows/original.exe personal/workbench/windows-execution-fixture.cc
+          x86_64-w64-mingw32-g++ -std=c++17 -O2 -static -Wall -Wextra -DRESULT_DELTA=1 -o .cache/personal-windows/changed.exe personal/workbench/windows-execution-fixture.cc
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: personal-windows-native-and-fixtures
+          path: |
+            native/windows/build/
+            .cache/personal-windows/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  execute:
+    needs: build-native
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.100
+      - name: Install pinned recovery tool on disposable runner
+        run: dotnet tool install ilspycmd --version 11.1.0.9782 --tool-path "$env:RUNNER_TEMP/rea-ilspy"
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: personal-windows-native-and-fixtures
+          path: .
+      - run: npm run verify:windows-native:artifact
+      - run: npm run build:cached
+        id: build
+      - name: Real native ownership and descendant cleanup conformance
+        run: node scripts/verify-windows-native.mjs . .cache/personal-windows/process-boundary.exe windows-native-proof.json
+      - name: Workbench CLI and MCP on Windows
+        run: node --test personal/workbench/workbench.test.mjs
+      - name: Execute native PE cases, reject changed behavior, and verify lifecycle
+        run: node personal/workbench/windows-execution-proof.mjs .cache/personal-windows/original.exe .cache/personal-windows/changed.exe windows-execution-proof.json
+      - name: Recover entire managed project and compare live Windows UI
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node personal/workbench/managed-restore-proof.mjs "$env:RUNNER_TEMP/rea-ilspy/ilspycmd.exe" (Get-Command dotnet).Source .cache/managed-proof
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: personal-windows-execution-proof
+          path: |
+            windows-native-proof.json
+            windows-execution-proof.json
+            .cache/managed-proof/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

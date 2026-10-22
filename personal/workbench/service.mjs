@@ -1,6 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { contracts, VERSION } from "./contracts.mjs";
+import { createEvidence } from "../../dist/domain/evidence.js";
+import { createEvidenceBundle } from "../../dist/domain/evidenceBundle.js";
+import { restoreManaged } from "./managed-restore.mjs";
 import {
   withEngine,
   parseEvidence,
@@ -168,6 +171,80 @@ export async function execute(operation, rawInput, { signal } = {}) {
     const state = snapshot.state;
     let bundle = snapshot.bundle;
     if (operation === "project_plan") return plan(state);
+    if (operation === "restore_managed_application") {
+      const captured = await temporary(project, (directory) =>
+        withEngine(
+          directory,
+          bundle,
+          async (call) => {
+            assertOriginal(
+              state,
+              inspection(
+                await call("inspect_artifact", {
+                  input_path: state.target.path,
+                }),
+              ),
+            );
+            const managed = parseEvidence(
+              await call("inspect_managed_artifact", {
+                path: resolve(input.assembly_path),
+              }),
+            );
+            const inventory = bundle.records.find(
+              (item) => item.evidence_id === state.target.inventory_evidence_id,
+            );
+            const result = await restoreManaged(
+              input,
+              state,
+              inventory,
+              signal,
+            );
+            const evidence = createEvidence(
+              {
+                path: managed.subject.local_path,
+                sha256: managed.subject.digest.sha256,
+                format: managed.subject.format,
+              },
+              {
+                id: "personal-rea-workbench",
+                name: "Personal REA managed restoration",
+                version: VERSION,
+              },
+              {
+                predicateType: "personal-rea.managed-restore",
+                operation,
+                parameters: input,
+                result,
+                confidence: "observed",
+                authority: "controlled-replay",
+                evidenceLinks: [managed.evidence_id],
+                limitations: result.limitations,
+              },
+            );
+            return { result, evidence };
+          },
+          signal,
+        ),
+      );
+      bundle = createEvidenceBundle(
+        [...captured.bundle.records, captured.result.evidence],
+        captured.bundle.unknowns,
+      );
+      state.revision += 1;
+      state.updated_at = new Date().toISOString();
+      state.engine_version = captured.engine_version;
+      state.workbench_version = VERSION;
+      await save(project, state, bundle);
+      return {
+        status: "rebuilt",
+        behavior: "not-run",
+        output_directory: captured.result.result.output_directory,
+        evidence_id: captured.result.evidence.evidence_id,
+        source_files: captured.result.result.recovered_sources.length,
+        output_files: captured.result.result.rebuilt_files.length,
+        limitations: captured.result.result.limitations,
+      };
+    }
     if (operation === "project_export") {
       const destination = resolve(input.destination);
       await assertOutsideTarget(destination, state.target.path, true);
