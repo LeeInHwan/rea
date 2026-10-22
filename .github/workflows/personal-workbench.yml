@@ -1,0 +1,32 @@
+name: Personal REA Workbench
+
+on:
+  push:
+    branches: [main, "feat/personal-rea-*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  personal-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cached
+      - run: node --test personal/workbench/workbench.test.mjs personal/workbench/update.test.mjs
+      - run: npm run test:focused -- tests/acceptance/emptyTargetPathCli.test.ts tests/boundary/mcp/artifactMcp.test.ts tests/boundary/cli/evidenceBundleCommands.test.ts tests/boundary/filesystem/evidenceBundleFiles.test.ts

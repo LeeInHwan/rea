@@ -26,10 +26,11 @@ cliTest(
       arguments: ["inspect-artifact", ".", "--json"],
       cwd,
     });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(0);
     expect(result.json).toMatchObject({
-      code: "target_unavailable",
-      details: { path: cwd, constraint: "directory_requires_file" },
+      operation: "inspect_artifact",
+      subject: { local_path: cwd, format: "directory" },
+      normalized_result: { subject: { root_format: "directory" } },
     });
   },
 );

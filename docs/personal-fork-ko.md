@@ -23,6 +23,9 @@ Codex 요청 예시:
 
 ## 이 포크의 개선
 
+- [Personal REA Workbench](personal-rea-workbench.md)는 프로젝트별 증거 저장·재개,
+  기능 계약, 의존성 계획, 원본/후보 검증과 패키지 내보내기를 제공합니다.
+  `rea-workbench` CLI 또는 `rea_workbench` MCP로 사용합니다.
 - `inspect-artifact`에서 일반 설치 폴더와 앱 번들을 직접 검사합니다.
   번들의 실행 파일을 먼저 열지 않아도 됩니다.
 - MCP `inspect_artifact`에 선택적 `input_path`를 추가했습니다.
@@ -50,8 +53,9 @@ APK는 [Android 분석 안내](android-analysis.md)에 따라
 
 ## 소스 업데이트
 
-포크에서 변경한 기능을 유지하려면 npm 배포판으로 덮어쓰지 말고 이 체크아웃을
-빌드합니다. `.nvmrc`와 `package.json`에 지정된 Node/npm 버전을 사용합니다.
+일상적인 업데이트는 [Workbench의 stable 업데이트 경로](personal-rea-workbench.md#공식-버전-자동-추종)를
+사용합니다. 별도 작업 공간에서 개인 기능의 호환성 검사를 통과한 뒤 설치 런타임을
+전환합니다. 수동 개발에서는 `.nvmrc`와 `package.json`의 Node/npm을 사용합니다.
 
 ```sh
 git fetch upstream
@@ -60,8 +64,9 @@ npm ci
 npm run build:cached
 ```
 
-MCP는 이 로컬 빌드를 사용하도록 등록되어야 합니다. 등록된 명령과 환경 변수를
-유지하고, 빌드 또는 스킬 갱신 후에는 연결한 에이전트를 재시작합니다.
+설치된 MCP는 `~/.local/share/rea-personal/current`의 검증된 빌드를 사용합니다.
+개발 checkout을 빌드하는 것만으로 설치 런타임이 바뀌지는 않습니다. 등록된 환경
+변수를 유지하고, 런타임 전환 후에는 MCP를 재연결하거나 새 세션을 시작합니다.
 
 2026-10-23에 공식 배포판 6.7.0을 통합했습니다. 기존 경로 검사 기능을 유지하고,
 공식 후속 커밋 `23f984b1a`의 Android 검증 스크립트 수정도 반영했습니다.
