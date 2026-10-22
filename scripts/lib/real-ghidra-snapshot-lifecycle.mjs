@@ -36,7 +36,7 @@ export async function verifyGhidraSnapshotLifecycle(
     );
     const error = requireMcpToolError(reply);
     assert.equal(
-      error?.code,
+      error.code,
       "evidence_integrity_mismatch",
       JSON.stringify(reply),
     );
@@ -51,6 +51,7 @@ export async function verifyGhidraSnapshotLifecycle(
       /close.*without saving a snapshot/iu,
     );
     assert.match(error.remediation.action, /export_evidence_bundle/u);
+    assert.equal(error.retryable, false);
     rejectedCalls++;
   };
   try {

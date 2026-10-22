@@ -215,12 +215,38 @@ export const registerFridaCommands = (
     run: ({ args, options }) =>
       withCommandCancellation((signal) =>
         logCliCommand(logger, CLI_COMMANDS.instrumentWithFrida, async () => {
+          if (args.mode === "attach" && options.argument !== undefined)
+            return projectAnalysisError(
+              new AnalysisInputError(
+                CLI_COMMANDS.instrumentWithFrida,
+                undefined,
+                [
+                  {
+                    path: ["argument"],
+                    reason: "invalid_value",
+                    message:
+                      "--argument is only valid in spawn mode; remove it when attaching to a process.",
+                  },
+                ],
+              ),
+            );
           if (
             (options.script === undefined) ===
             (options.scriptFile === undefined)
           )
             return projectAnalysisError(
-              new AnalysisInputError(CLI_COMMANDS.instrumentWithFrida),
+              new AnalysisInputError(
+                CLI_COMMANDS.instrumentWithFrida,
+                undefined,
+                [
+                  {
+                    path: ["script"],
+                    reason: "invalid_value",
+                    message:
+                      "Provide exactly one of --script or --script-file.",
+                  },
+                ],
+              ),
             );
           const remote = remoteFrom(options);
           const selected =
@@ -248,7 +274,17 @@ export const registerFridaCommands = (
                 };
           if (targetInput === undefined)
             return projectAnalysisError(
-              new AnalysisInputError(CLI_COMMANDS.instrumentWithFrida),
+              new AnalysisInputError(
+                CLI_COMMANDS.instrumentWithFrida,
+                undefined,
+                [
+                  {
+                    path: ["target"],
+                    reason: "invalid_value",
+                    message: "attach mode needs a positive integer process ID.",
+                  },
+                ],
+              ),
             );
           const result = await withProviderCleanup(() =>
             service.instrument(

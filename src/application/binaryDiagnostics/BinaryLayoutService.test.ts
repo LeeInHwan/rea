@@ -17,6 +17,9 @@ it.each([
   "rejects malformed selection before starting the provider: %j",
   async (input) => {
     const service = new BinaryLayoutService({
+      inspectAndClose(input, options) {
+        return this.inspect(input, options);
+      },
       identity: BINARY_LAYOUT_TEST_PROVIDER,
       inspect: () => {
         throw new Error("must not run");
@@ -32,6 +35,9 @@ it.each([
 it("records the decoded layout once in its Evidence", async () => {
   const layout = binaryLayoutFixture();
   const service = new BinaryLayoutService({
+    inspectAndClose(input, options) {
+      return this.inspect(input, options);
+    },
     identity: BINARY_LAYOUT_TEST_PROVIDER,
     inspect: () => Promise.resolve(ok(layout)),
   });
@@ -49,6 +55,9 @@ it("preserves a provider's actionable unsupported reason", async () => {
     "ELF core belongs to recorded-crash analysis.",
   );
   const service = new BinaryLayoutService({
+    inspectAndClose(input, options) {
+      return this.inspect(input, options);
+    },
     identity: BINARY_LAYOUT_TEST_PROVIDER,
     inspect: () => Promise.resolve(err(failure)),
   });
@@ -58,25 +67,40 @@ it("preserves a provider's actionable unsupported reason", async () => {
 it("cancels before invocation and after an acquired observation", async () => {
   const controller = new AbortController();
   const service = new BinaryLayoutService({
+    inspectAndClose(input, options) {
+      return this.inspect(input, options);
+    },
     identity: BINARY_LAYOUT_TEST_PROVIDER,
     inspect: () => {
       controller.abort();
       return Promise.resolve(ok(binaryLayoutFixture()));
     },
   });
-  expect(
-    await service.inspect(
-      { path: "/artifacts/source-owned.elf" },
-      { signal: controller.signal },
-    ),
-  ).toMatchObject({
+  const late = await service.inspect(
+    { path: "/artifacts/source-owned.elf" },
+    { signal: controller.signal },
+  );
+  expect(late).toMatchObject({
     ok: false,
     error: {
       _tag: "AnalysisCancelledError",
       capturedOutput: binaryLayoutFixture().diagnostics,
+      partialObservation: {
+        operation: "inspect_binary_layout",
+        normalized_result: binaryLayoutFixture(),
+      },
     },
   });
+  if (!late.ok) {
+    expect(parseEvidence(late.error.partialObservation)).toMatchObject({
+      operation: "inspect_binary_layout",
+      normalized_result: binaryLayoutFixture(),
+    });
+  }
   const untouched = new BinaryLayoutService({
+    inspectAndClose(input, options) {
+      return this.inspect(input, options);
+    },
     identity: BINARY_LAYOUT_TEST_PROVIDER,
     inspect: () => {
       throw new Error("must not run");
@@ -112,6 +136,9 @@ it.each(["different-path", "invalid-digest", "outside-range"])(
         permissions: { read: true, write: false, execute: true },
       });
     const service = new BinaryLayoutService({
+      inspectAndClose(input, options) {
+        return this.inspect(input, options);
+      },
       identity: BINARY_LAYOUT_TEST_PROVIDER,
       inspect: () => Promise.resolve(ok(fixture)),
     });
@@ -123,6 +150,24 @@ it.each(["different-path", "invalid-digest", "outside-range"])(
         _tag: "AnalysisOutputError",
         capturedOutput: fixture.diagnostics,
       },
+    });
+    const controller = new AbortController();
+    const lateInvalid = await new BinaryLayoutService({
+      inspectAndClose(input, options) {
+        return this.inspect(input, options);
+      },
+      identity: BINARY_LAYOUT_TEST_PROVIDER,
+      inspect: () => {
+        controller.abort();
+        return Promise.resolve(ok(fixture));
+      },
+    }).inspect(
+      { path: "/artifacts/source-owned.elf" },
+      { signal: controller.signal },
+    );
+    expect(lateInvalid).toMatchObject({
+      ok: false,
+      error: { _tag: "AnalysisOutputError" },
     });
   },
 );

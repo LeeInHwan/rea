@@ -1,5 +1,9 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { expect, it } from "vitest";
 
+import { FridaScriptLoadCancelledError } from "./FridaInstrumentationPort.js";
 import type { FridaInstrumentationPort } from "./FridaInstrumentationPort.js";
 import { FridaInstrumentationService } from "./FridaInstrumentationService.js";
 import {
@@ -101,6 +105,66 @@ it.each(["startSession", "instrument"] as const)(
     expect(loads).toBe(0);
   },
 );
+
+it.each([
+  [join(tmpdir(), "rea-missing-frida-script.js"), "no file exists there"],
+  [tmpdir(), "it is not a regular file"],
+])(
+  "rejects the unreadable script file %s before starting Frida",
+  async (path, reason) => {
+    let starts = 0;
+    const provider = createProvider({
+      async startSession() {
+        starts += 1;
+        return { ok: true, value: createSession() };
+      },
+    });
+    const service = new FridaInstrumentationService(provider);
+
+    const result = await service.instrument({
+      mode: "spawn",
+      deviceId: "local",
+      program: "/tmp/fixture",
+      source: { sourceKind: "file", path },
+      durationMs: 1,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(AnalysisInputError);
+    expect((result.error as AnalysisInputError).issues).toEqual([
+      {
+        path: ["path"],
+        reason: "invalid_value",
+        message: `Cannot read Frida script file ${path}: ${reason}.`,
+      },
+    ]);
+    expect(starts).toBe(0);
+  },
+);
+
+it("reports cancellation before checking a file script source", async () => {
+  const service = new FridaInstrumentationService(createProvider());
+  const controller = new AbortController();
+  controller.abort(new Error("cancelled before call"));
+
+  const result = await service.instrument(
+    {
+      mode: "spawn",
+      deviceId: "local",
+      program: "/tmp/fixture",
+      source: {
+        sourceKind: "file",
+        path: join(tmpdir(), "rea-missing-frida-script.js"),
+      },
+      durationMs: 1,
+    },
+    controller.signal,
+  );
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.error._tag).toBe("AnalysisCancelledError");
+});
 
 it("does not resume a spawned target when cancellation arrives during script loading", async () => {
   const controller = new AbortController();
@@ -505,4 +569,75 @@ it("cleans up a session and returns typed cancellation after a pending start", a
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.error._tag).toBe("AnalysisCancelledError");
   expect(closed).toEqual(["00000000-0000-4000-8000-000000000001"]);
+});
+
+it("retains a cancelled provider load's source and messages in one-shot Evidence", async () => {
+  const controller = new AbortController();
+  const script = {
+    ...createScriptObservation(),
+    messages: [{ type: "send", payload: "cancelled-load" }],
+  };
+  const service = new FridaInstrumentationService(
+    createProvider({
+      async loadScript() {
+        controller.abort(new Error("cancel during native load"));
+        return {
+          ok: false,
+          error: new FridaScriptLoadCancelledError(script, {
+            cause: controller.signal.reason,
+          }),
+        };
+      },
+    }),
+  );
+  const result = await service.instrument(
+    {
+      mode: "spawn",
+      program: "/fixture",
+      source: { sourceKind: "inline", source: "send('cancelled-load')" },
+      durationMs: 0,
+    },
+    controller.signal,
+  );
+  if (result.ok) throw new Error("Cancelled instrumentation succeeded");
+  expect(result.error.partialObservation).toMatchObject({
+    normalized_result: {
+      source_kind: "inline",
+      source_sha256: script.sourceSha256,
+      messages: script.messages,
+      instrumentation_cleanup: "released",
+    },
+  });
+});
+
+it("preserves a provider-committed load when cancellation arrives during result delivery", async () => {
+  const controller = new AbortController();
+  let unloads = 0;
+  const script = createScriptObservation();
+  const service = new FridaInstrumentationService(
+    createProvider({
+      loadScript() {
+        const completed = Promise.resolve({ ok: true as const, value: script });
+        void completed.then(() =>
+          controller.abort(new Error("late cancellation")),
+        );
+        return completed;
+      },
+      async unloadScript() {
+        unloads += 1;
+        return { ok: true, value: null };
+      },
+    }),
+  );
+  const loaded = await service.loadScript(
+    createSession().sessionId,
+    { sourceKind: "inline", source: "send('ready')" },
+    controller.signal,
+  );
+  expect(controller.signal.aborted).toBe(true);
+  if (!loaded.ok) throw loaded.error;
+  expect(loaded.value.normalized_result).toMatchObject({
+    script_id: script.scriptId,
+  });
+  expect(unloads).toBe(0);
 });

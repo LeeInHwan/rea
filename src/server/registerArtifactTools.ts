@@ -1,34 +1,39 @@
 import type { EvidenceMcpServer } from "./EvidenceMcpServer.js";
-import type { EvidenceWriter } from "../application/investigation/InvestigationRecordPort.js";
 
 import {
   ARTIFACT_TOOL_CONTRACTS,
   artifactInspectionInputSchema,
 } from "../contracts/artifactToolContracts.js";
-import type { EvidenceLookup } from "../application/EvidenceInputResolver.js";
-import { summarizeRetainedAnalysis } from "../application/analysisView/AnalysisViewService.js";
 import { createArtifactExtractionDestination } from "../application/artifacts/ArtifactExtractionDestination.js";
-import { ok } from "../domain/result.js";
-import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
-import type { Logger } from "pino";
 import { registerEvidenceTools } from "./registerEvidenceTools.js";
 import { artifactInspectionResultSchema } from "../domain/artifactInspection.js";
 import type { ArtifactPathAnalysisService } from "../application/artifacts/ArtifactPathAnalysisService.js";
+import {
+  retainedSummaryDelivery,
+  withoutDeliveryDetail,
+  type EvidenceToolFamilyOptions,
+} from "./retainedSummaryDelivery.js";
+
+/** Operations whose MCP delivery may be a retained summary view. */
+const SUMMARY_DELIVERY: ReadonlySet<string> = new Set([
+  "inspect_artifact",
+  "decode_interface_builder",
+]);
+/** inspect_artifact keeps an explicit detail in its Evidence parameters. */
+const decodeWithoutDelivery = withoutDeliveryDetail(
+  new Set(["decode_interface_builder"]),
+);
 
 /** Register deterministic artifact inventory and safe extraction operations. */
 export const registerArtifactTools = (
   server: EvidenceMcpServer,
-  options: {
+  options: EvidenceToolFamilyOptions & {
     readonly pathAnalysis: ArtifactPathAnalysisService;
-    readonly logger: Logger;
-    readonly activeTarget: (() => BinaryTarget | undefined) | undefined;
-    readonly recordEvidence: EvidenceWriter["recordEvidence"] | undefined;
-    readonly evidenceById?: EvidenceLookup | undefined;
-    readonly withAdmittedAnalysis: import("./analysisAdmission.js").WithAdmittedAnalysis;
   },
 ): void => {
   registerEvidenceTools(server, ARTIFACT_TOOL_CONTRACTS, {
     ...options,
+    ...retainedSummaryDelivery(SUMMARY_DELIVERY, options),
     analysisForAdmission: (analysis) => ({
       execute: (operation, parameters, executionOptions) => {
         if (
@@ -59,15 +64,9 @@ export const registerArtifactTools = (
       }
       return operation === "extract_artifact"
         ? { ...parameters, output_root: createArtifactExtractionDestination() }
-        : parameters;
+        : decodeWithoutDelivery(operation, parameters);
     },
-    projectEvidence: (operation, parameters, evidence) =>
-      operation === "inspect_artifact" && parameters.detail === "summary"
-        ? summarizeRetainedAnalysis(evidence, {
-            recordEvidence: options.recordEvidence,
-            evidenceById: options.evidenceById,
-          })
-        : ok(evidence),
+    parametersForEvidence: decodeWithoutDelivery,
     sourceEvidence: (operation, result) =>
       operation === "inspect_artifact"
         ? artifactInspectionResultSchema

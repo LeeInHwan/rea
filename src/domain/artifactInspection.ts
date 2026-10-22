@@ -74,7 +74,10 @@ export const artifactInspectionResultSchema = z.strictObject({
         operation: z.literal("inventory_artifact"),
         status: z.literal("completed"),
         evidence_id: evidenceIdSchema,
-        evidence: evidenceSchema,
+        evidence: evidenceSchema.safeExtend({
+          operation: z.literal("inventory_artifact"),
+          normalized_result: artifactInventoryResultSchema,
+        }),
       }),
     )
     .min(1),
@@ -85,7 +88,7 @@ export const artifactInspectionResultSchema = z.strictObject({
   next_probes: z.array(nextProbeSchema),
   coverage: z.strictObject({
     status: z.enum(["complete-within-substeps", "partial", "truncated"]),
-    substeps_completed: z.literal(1),
+    substeps_completed: z.number().int().min(1),
     observations_retained: z.number().int().min(0),
     observations_omitted: z.number().int().min(0),
     hypotheses_retained: z.number().int().min(0),
@@ -102,24 +105,6 @@ export const artifactInspectionResultSchema = z.strictObject({
 export type ArtifactInspectionResult = z.infer<
   typeof artifactInspectionResultSchema
 >;
-
-/**
- * The current producer guarantees a concrete inventory payload. Specialize
- * its output without narrowing the historical inspection/Evidence input
- * parser or applying inventory defaults inside an authenticated imported record.
- */
-export const artifactInspectionOutputSchema =
-  artifactInspectionResultSchema.safeExtend({
-    substeps: z
-      .array(
-        artifactInspectionResultSchema.shape.substeps.element.safeExtend({
-          evidence: evidenceSchema.safeExtend({
-            normalized_result: artifactInventoryResultSchema,
-          }),
-        }),
-      )
-      .min(1),
-  });
 
 /** Project one successful inventory Evidence record into an inspection report. */
 export const createArtifactInspection = (
@@ -302,25 +287,25 @@ const probesFor = (
     probesForFormat(rootFormat).map((probe) => [probe.operation, probe]),
   );
   // Consume the inventory's classifications rather than guessing from the
-  // supplied folder name or re-reading file headers. Unread and linked entries
-  // cannot establish a next analysis target.
+  // supplied folder name or re-reading file headers. Linked code is not a
+  // supported target; plist inspection can follow a classified readable link.
   const childFormats = uniqueSorted(
     inventory.occurrences
       .filter(
         (entry) =>
           entry.parent_occurrence_id !== null &&
-          entry.artifact_id !== null &&
           !entry.encrypted &&
-          (entry.hash_status === "verified" ||
-            entry.hash_status === "mismatched") &&
-          (entry.entry_kind === "file" || entry.entry_kind === "slice"),
+          ((entry.entry_kind === "symlink" &&
+            entry.artifact_format === "plist") ||
+            (entry.artifact_id !== null &&
+              (entry.hash_status === "verified" ||
+                entry.hash_status === "mismatched") &&
+              (entry.entry_kind === "file" || entry.entry_kind === "slice"))),
       )
       .map((entry) => entry.artifact_format),
   );
   let needsExtraction = false;
   for (const format of childFormats) {
-    // Plists remain in the inventory; the next step here is application code.
-    if (format === "plist") continue;
     for (const probe of probesForFormat(format)) {
       if (probes.has(probe.operation)) continue;
       const embedded = rootFormat !== "directory";
@@ -336,6 +321,12 @@ const probesFor = (
   if (nativeProbe !== undefined) {
     probes.delete("open_binary");
     probes.set("open_binary", nativeProbe);
+  }
+  // Keep upstream bundle-metadata guidance after executable analysis.
+  const plistProbe = probes.get("inspect_plist");
+  if (plistProbe !== undefined) {
+    probes.delete("inspect_plist");
+    probes.set("inspect_plist", plistProbe);
   }
   return [
     ...(needsExtraction
@@ -353,7 +344,7 @@ const probesFor = (
 };
 
 const probesForFormat = (
-  format: string,
+  format: ArtifactInventoryResult["manifest"]["root_format"],
 ): ArtifactInspectionResult["next_probes"] => {
   if (["asar", "javascript-bundle"].includes(format))
     return [

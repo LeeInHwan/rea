@@ -8,6 +8,7 @@ import {
 import { analyzeInterfaceBuilderBundle } from "./InterfaceBuilderAnalysis.js";
 import {
   appleAssetCatalogInputSchema,
+  appleResourceKeyFields,
   parseAppleAssetCatalogRecords,
   projectAppleAssetCatalogPage,
 } from "../../domain/apple/appleAssetCatalog.js";
@@ -16,17 +17,6 @@ import { execFileOutput } from "../../process/ExecFileOutput.js";
 const ASSETUTIL = "/usr/bin/assetutil";
 const MAX_CATALOG_BYTES = 64 * 1024 * 1024;
 const MAX_TOTAL_METADATA_BYTES = 64 * 1024 * 1024;
-const RESOURCE_KEY_FIELDS = new Set([
-  "image",
-  "imageName",
-  "image_name",
-  "resourceName",
-  "resource_name",
-  "assetName",
-  "asset_name",
-  "UIImageName",
-  "NSImageName",
-]);
 
 /** Inspect compiled asset catalog metadata without extracting rendition bytes. */
 export const analyzeAppleAssetCatalogs = async (input: {
@@ -39,6 +29,7 @@ export const analyzeAppleAssetCatalogs = async (input: {
     path: string,
     signal?: AbortSignal,
   ) => Promise<string>;
+  readonly analyzeInterfaceBuilder?: typeof analyzeInterfaceBuilderBundle;
 }) => {
   if (process.platform !== "darwin" && input.runAssetUtil === undefined)
     throw new ArtifactReaderFailure(
@@ -46,52 +37,35 @@ export const analyzeAppleAssetCatalogs = async (input: {
       "Apple asset catalog inspection requires macOS assetutil",
     );
   const page = appleAssetCatalogInputSchema.parse(input.page ?? {});
-  const reader = new DirectoryArtifactReader(input.bundlePath);
-  const catalogs: {
-    path: string;
-    sha256: string;
-    records: ReturnType<typeof parseAppleAssetCatalogRecords>;
-  }[] = [];
-  const uninspected: string[] = [];
-  let totalMetadataBytes = 0;
-  try {
-    for await (const entry of reader.entries(input.signal)) {
-      if (!entry.path.endsWith("Assets.car")) continue;
-      if (entry.kind !== "file") {
-        uninspected.push(`${entry.path} (${entry.kind})`);
-        continue;
-      }
-      const inspected = await inspectAssetCatalogEntry({
-        reader,
-        entry,
-        runAssetUtil:
-          input.runAssetUtil ??
-          ((path, signal) => runAssetUtil(path, input.environment, signal)),
-        ...(input.signal === undefined ? {} : { signal: input.signal }),
-      });
-      totalMetadataBytes += inspected.metadataBytes;
-      if (totalMetadataBytes > MAX_TOTAL_METADATA_BYTES)
-        throw new ArtifactReaderFailure(
-          "limit",
-          `Combined asset catalog metadata exceeds ${MAX_TOTAL_METADATA_BYTES} bytes`,
-        );
-      catalogs.push(inspected.catalog);
-    }
-  } finally {
-    await reader.close();
-  }
-  // Without any readable catalog, unmatched resource keys would overstate an
-  // absence that a skipped catalog entry may contradict.
-  if (catalogs.length === 0 && uninspected.length > 0)
-    throw new ArtifactReaderFailure(
-      "path",
-      `Asset catalog entries are not regular files and were not inspected: ${uninspected.join(", ")}`,
-    );
-  const interfaceBuilder = await analyzeInterfaceBuilderBundle({
+  // The Interface Builder graph only supplies resource keys for the join. Its
+  // bundle walk is independent of the catalog walk, so both run together; a
+  // catalog failure cancels it and is reported as the sequential order would.
+  const interfaceBuilderCancel = new AbortController();
+  const interfaceBuilderAnalysis = (
+    input.analyzeInterfaceBuilder ?? analyzeInterfaceBuilderBundle
+  )({
     bundlePath: input.bundlePath,
     targetSha256: input.targetSha256,
-    ...(input.signal === undefined ? {} : { signal: input.signal }),
-  });
+    signal:
+      input.signal === undefined
+        ? interfaceBuilderCancel.signal
+        : AbortSignal.any([input.signal, interfaceBuilderCancel.signal]),
+  }).then(
+    (value) => ({ ok: true, value }) as const,
+    (error: unknown) => ({ ok: false, error }) as const,
+  );
+  let catalogs: Awaited<ReturnType<typeof collectAssetCatalogs>>["catalogs"];
+  let uninspected: readonly string[];
+  try {
+    ({ catalogs, uninspected } = await collectAssetCatalogs(input));
+  } catch (cause: unknown) {
+    interfaceBuilderCancel.abort();
+    await interfaceBuilderAnalysis;
+    throw cause;
+  }
+  const analyzed = await interfaceBuilderAnalysis;
+  if (!analyzed.ok) throw analyzed.error;
+  const interfaceBuilder = analyzed.value;
   const resourceReferences = collectInterfaceBuilderResourceKeys(
     interfaceBuilder.graph.nodes,
   );
@@ -126,6 +100,62 @@ export const analyzeAppleAssetCatalogs = async (input: {
         : []),
     ],
   };
+};
+
+/** Inspect every regular Assets.car in the bundle; non-file entries are listed. */
+const collectAssetCatalogs = async (input: {
+  readonly bundlePath: string;
+  readonly environment: Readonly<NodeJS.ProcessEnv>;
+  readonly signal?: AbortSignal;
+  readonly runAssetUtil?: (
+    path: string,
+    signal?: AbortSignal,
+  ) => Promise<string>;
+}) => {
+  const reader = new DirectoryArtifactReader(input.bundlePath);
+  const catalogs: {
+    path: string;
+    sha256: string;
+    records: ReturnType<typeof parseAppleAssetCatalogRecords>;
+  }[] = [];
+  const uninspected: string[] = [];
+  let totalMetadataBytes = 0;
+  try {
+    for await (const entry of reader.entries(input.signal)) {
+      // Reader paths are `/`-separated; only an entry named exactly
+      // Assets.car is a compiled catalog, not e.g. NotAssets.car.
+      if (entry.path.split("/").at(-1) !== "Assets.car") continue;
+      if (entry.kind !== "file") {
+        uninspected.push(`${entry.path} (${entry.kind})`);
+        continue;
+      }
+      const inspected = await inspectAssetCatalogEntry({
+        reader,
+        entry,
+        runAssetUtil:
+          input.runAssetUtil ??
+          ((path, signal) => runAssetUtil(path, input.environment, signal)),
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      });
+      totalMetadataBytes += inspected.metadataBytes;
+      if (totalMetadataBytes > MAX_TOTAL_METADATA_BYTES)
+        throw new ArtifactReaderFailure(
+          "limit",
+          `Combined asset catalog metadata exceeds ${MAX_TOTAL_METADATA_BYTES} bytes`,
+        );
+      catalogs.push(inspected.catalog);
+    }
+  } finally {
+    await reader.close();
+  }
+  // Without any readable catalog, unmatched resource keys would overstate an
+  // absence that a skipped catalog entry may contradict.
+  if (catalogs.length === 0 && uninspected.length > 0)
+    throw new ArtifactReaderFailure(
+      "path",
+      `Asset catalog entries are not regular files and were not inspected: ${uninspected.join(", ")}`,
+    );
+  return { catalogs, uninspected };
 };
 
 const inspectAssetCatalogEntry = async (input: {
@@ -201,27 +231,22 @@ export const collectInterfaceBuilderResourceKeys = (
   }[],
 ) =>
   nodes.flatMap((node) => {
+    if (node.kind !== "resource") return [];
     const source = node.evidence.find(
       (item) => item.artifact_path !== null && item.artifact_sha256 !== null,
     );
     const sourcePath = source?.artifact_path;
     const sourceArchiveSha256 = source?.artifact_sha256;
     if (sourcePath == null || sourceArchiveSha256 == null) return [];
-    return Object.entries(node.attributes).flatMap(([field, value]) =>
-      RESOURCE_KEY_FIELDS.has(field) &&
-      typeof value === "string" &&
-      value.length > 0
-        ? [
-            {
-              sourceNodeId: node.id,
-              sourcePath,
-              sourceArchiveSha256,
-              field,
-              key: value,
-            },
-          ]
-        : [],
-    );
+    return appleResourceKeyFields(node.attributes).flatMap(([field, value]) => [
+      {
+        sourceNodeId: node.id,
+        sourcePath,
+        sourceArchiveSha256,
+        field,
+        key: value,
+      },
+    ]);
   });
 
 const runAssetUtil = async (

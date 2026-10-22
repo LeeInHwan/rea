@@ -34,6 +34,16 @@ const connection = z.strictObject({
 type InterfaceBuilderObject = z.infer<typeof objectNode>;
 type InterfaceBuilderConnection = z.infer<typeof connection>;
 
+/** UIKit runtime connection classes store their endpoints and labels under UI-prefixed keys. */
+export const isUIKitRuntimeConnectionClass = (className: string): boolean =>
+  /^UIRuntime\w*Connection$/u.test(className);
+
+/** The connection class selects the source archive field namespace. */
+export const interfaceBuilderConnectionFieldNames = (className: string) =>
+  isUIKitRuntimeConnectionClass(className)
+    ? { source: "UISource", destination: "UIDestination", label: "UILabel" }
+    : { source: "NSSource", destination: "NSDestination", label: "NSLabel" };
+
 /** Parse ibtool dictionaries or compiled keyed archives into typed records. */
 export const parseInterfaceBuilderRecords = (
   value: unknown,
@@ -45,6 +55,7 @@ export const parseInterfaceBuilderRecords = (
   readonly objectCount: number;
   readonly omittedObjects: number;
   readonly omittedConnections: number;
+  readonly unresolvedConnections: number;
   readonly omittedHierarchyReferences: number;
 } => {
   const root = record(value);
@@ -120,11 +131,12 @@ export const parseInterfaceBuilderRecords = (
   return {
     objects,
     connections,
-    hierarchy: Array.isArray(hierarchyRaw) ? hierarchyRaw.slice(0, 20_000) : [],
+    hierarchy: Array.isArray(hierarchyRaw) ? hierarchyRaw : [],
     classes: classesRaw,
     objectCount: objectEntries.length,
     omittedObjects: Math.max(0, objectEntries.length - 20_000),
     omittedConnections,
+    unresolvedConnections: 0,
     omittedHierarchyReferences: 0,
   };
 };
@@ -310,15 +322,21 @@ const parseKeyedArchive = (
   const connections: InterfaceBuilderConnection[] = [];
   let objectCount = 0;
   let omittedConnections = 0;
+  let unresolvedConnections = 0;
   for (const [index, raw] of objectTable.entries()) {
     if (index === 0) continue;
     const resolved = record(resolve(raw));
     const className = firstString(resolved.className);
-    if (className === null) continue;
+    // An archived object names its class with its own `$class` reference;
+    // when that reference cannot be resolved the object is still observed,
+    // with an unknown class. Scalars and class descriptors are not objects.
+    if (className === null && !Object.hasOwn(record(raw), "$class")) continue;
     objectCount += 1;
     const fields = Object.fromEntries(
       Object.entries(resolved).filter(([key]) => key !== "className"),
     );
+    // Keep the unresolvable class reference itself, e.g. a dangling UID.
+    if (className === null) fields.$class = record(raw).$class;
     const authoredId = firstString(fields.objectID, fields["object-id"]);
     const objectId =
       authoredId ??
@@ -344,40 +362,53 @@ const parseKeyedArchive = (
         }),
       );
     if (
+      className !== null &&
       /(?:Outlet|Connection|Segue|ActionConnection|ControlConnector)/iu.test(
         className,
       )
     ) {
       const controlAction = /ControlConnector/iu.test(className);
-      // AppKit connectors (NSNibOutletConnector, NSNibControlConnector)
-      // archive NSSource as the outlet owner or sending control and
-      // NSDestination as the outlet value or action target, so they are read
-      // in that order without the inversion the unprefixed fields use.
-      const source = firstObjectReference(
-        controlAction ? fields.destination : fields.source,
-        archivedObjectReference(fields.NSSource),
-        controlAction ? fields.to : fields.from,
-        controlAction ? fields.target : fields.owner,
-      );
-      if (source === null) continue;
+      const uiKit = isUIKitRuntimeConnectionClass(className);
+      // AppKit and UIKit archive the same endpoint roles under their own
+      // class-specific field namespaces; the source is the outlet owner.
+      const connectionFields = interfaceBuilderConnectionFieldNames(className);
+      const source = uiKit
+        ? archivedObjectReference(fields[connectionFields.source])
+        : firstObjectReference(
+            controlAction ? fields.destination : fields.source,
+            archivedObjectReference(fields[connectionFields.source]),
+            controlAction ? fields.to : fields.from,
+            controlAction ? fields.target : fields.owner,
+          );
+      if (source === null) {
+        // A recognized connector that cannot name its owner is an unresolved
+        // connection, not an absent one, and cannot be represented as a
+        // connection because connection identity requires a source.
+        unresolvedConnections += 1;
+        continue;
+      }
       const kind = controlAction ? "action" : classifyConnection(className);
       const parsedConnection = connection.parse({
         id: `archive:${objectId}`,
         kind,
         source_id: source,
-        destination_id: firstObjectReference(
-          controlAction ? fields.source : fields.destination,
-          archivedObjectReference(fields.NSDestination),
-          controlAction ? fields.from : fields.to,
-          controlAction ? fields.owner : fields.target,
-        ),
-        label: firstString(
-          fields.label,
-          fields.NSLabel,
-          fields.selector,
-          fields.identifier,
-          fields.action,
-        ),
+        destination_id: uiKit
+          ? archivedObjectReference(fields[connectionFields.destination])
+          : firstObjectReference(
+              controlAction ? fields.source : fields.destination,
+              archivedObjectReference(fields[connectionFields.destination]),
+              controlAction ? fields.from : fields.to,
+              controlAction ? fields.owner : fields.target,
+            ),
+        label: uiKit
+          ? firstString(fields[connectionFields.label])
+          : firstString(
+              fields.label,
+              fields[connectionFields.label],
+              fields.selector,
+              fields.identifier,
+              fields.action,
+            ),
         attributes: jsonSafeRecord(fields),
       });
       if (connections.length < 40_000) connections.push(parsedConnection);
@@ -410,6 +441,7 @@ const parseKeyedArchive = (
     objectCount,
     omittedObjects: Math.max(0, objectCount - 20_000),
     omittedConnections,
+    unresolvedConnections,
     omittedHierarchyReferences: hierarchy.omittedReferences,
   };
 };
@@ -497,7 +529,8 @@ const classifyConnection = (
 ): InterfaceBuilderConnection["kind"] => {
   const value = type.toLowerCase();
   if (value.includes("outlet")) return "outlet";
-  if (value.includes("action")) return "action";
+  if (value.includes("action") || value.includes("eventconnection"))
+    return "action";
   if (value.includes("segue")) return "segue";
   return "other";
 };

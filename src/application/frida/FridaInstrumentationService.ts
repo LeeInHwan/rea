@@ -1,13 +1,18 @@
+import { constants } from "node:fs";
+import { access, stat } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { createEvidence, type Evidence } from "../../domain/evidence.js";
 import { jsonObjectSchema, jsonValueSchema } from "../../domain/jsonValue.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
 import {
+  AnalysisAccessDeniedError,
   AnalysisCancelledError,
   AnalysisCapabilityUnavailableError,
+  AnalysisInputError,
 } from "../../domain/analysisErrorCore.js";
 import { err, ok, type Result } from "../../domain/result.js";
+import { FridaScriptLoadCancelledError } from "./FridaInstrumentationPort.js";
 import type {
   FridaDeviceSelector,
   FridaInstrumentationPort,
@@ -18,6 +23,64 @@ import type {
   FridaSessionStatus,
   StartFridaSessionInput,
 } from "./FridaInstrumentationPort.js";
+
+const unreadableScriptFile = async (
+  source: FridaScriptSource,
+): Promise<AnalysisError | undefined> => {
+  if (source.sourceKind !== "file") return undefined;
+  let reason: string;
+  let cause: unknown;
+  try {
+    if (!(await stat(source.path)).isFile())
+      reason = "it is not a regular file";
+    else {
+      await access(source.path, constants.R_OK);
+      return undefined;
+    }
+  } catch (failure: unknown) {
+    cause = failure;
+    const code =
+      failure instanceof Error && "code" in failure ? failure.code : undefined;
+    if (code === "EACCES" || code === "EPERM")
+      return new AnalysisAccessDeniedError(
+        "instrument_with_frida",
+        source.path,
+        code,
+        { cause },
+      );
+    reason =
+      code === "ENOENT" ? "no file exists there" : String(code ?? failure);
+  }
+  return new AnalysisInputError(
+    "instrument_with_frida",
+    cause === undefined ? undefined : { cause },
+    [
+      {
+        path: ["path"],
+        reason: "invalid_value",
+        message: `Cannot read Frida script file ${source.path}: ${reason}.`,
+      },
+    ],
+  );
+};
+
+/**
+ * Reject an unreadable script file before any attach or spawn effect;
+ * cancellation before or during the check still wins.
+ */
+const rejectBeforeStart = async (
+  source: FridaScriptSource,
+  signal: AbortSignal | undefined,
+): Promise<AnalysisError | undefined> => {
+  const cancelled = () =>
+    new AnalysisCancelledError(
+      "instrument_with_frida",
+      signal?.reason === undefined ? {} : { cause: signal.reason },
+    );
+  if (signal?.aborted) return cancelled();
+  const unreadable = await unreadableScriptFile(source);
+  return signal?.aborted ? cancelled() : unreadable;
+};
 
 /** Shared CLI/MCP workflows for Frida's device and instrumentation operations. */
 export class FridaInstrumentationService {
@@ -119,8 +182,17 @@ export class FridaInstrumentationService {
   async loadScript(
     sessionId: string,
     source: FridaScriptSource,
+    signal?: AbortSignal,
   ): Promise<Result<Evidence, AnalysisError>> {
-    const loaded = await this.#provider.loadScript(sessionId, source);
+    if (signal?.aborted)
+      return err(
+        new AnalysisCancelledError("load_frida_script", {
+          cause: signal.reason,
+        }),
+      );
+    const loaded = await this.#provider.loadScript(sessionId, source, signal);
+    if (!loaded.ok && loaded.error instanceof FridaScriptLoadCancelledError)
+      return err(cancelledScriptEvidence(sessionId, loaded.error));
     return loaded.ok
       ? ok(
           fridaEvidence("load_frida_script", scriptOutput(loaded.value), {
@@ -130,12 +202,12 @@ export class FridaInstrumentationService {
       : loaded;
   }
 
-  resumeSession(sessionId: string) {
-    return this.#provider.resumeSession(sessionId);
+  resumeSession(sessionId: string, signal?: AbortSignal) {
+    return this.#provider.resumeSession(sessionId, signal);
   }
 
-  unloadScript(sessionId: string, scriptId: string) {
-    return this.#provider.unloadScript(sessionId, scriptId);
+  unloadScript(sessionId: string, scriptId: string, signal?: AbortSignal) {
+    return this.#provider.unloadScript(sessionId, scriptId, signal);
   }
 
   status(sessionId: string): FridaSessionStatus | undefined {
@@ -163,6 +235,8 @@ export class FridaInstrumentationService {
       AnalysisError
     >
   > {
+    const rejected = await rejectBeforeStart(input.source, signal);
+    if (rejected !== undefined) return err(rejected);
     const started = await this.#startSession(
       input,
       signal,
@@ -179,14 +253,19 @@ export class FridaInstrumentationService {
     const loaded = await this.#provider.loadScript(
       started.value.sessionId,
       input.source,
+      signal,
     );
+    let scriptObservation: FridaScriptObservation | undefined;
+    if (loaded.ok) scriptObservation = loaded.value;
+    else if (loaded.error instanceof FridaScriptLoadCancelledError)
+      scriptObservation = loaded.error.script;
     if (signal?.aborted)
       return this.#cancelSession(
         "instrument_with_frida",
         started.value,
         input,
         signal.reason,
-        loaded.ok ? loaded.value : undefined,
+        scriptObservation,
       );
     if (!loaded.ok) {
       const closed = await this.#provider.closeSession(started.value.sessionId);
@@ -203,6 +282,7 @@ export class FridaInstrumentationService {
     if (started.value.mode === "spawn") {
       const resumed = await this.#provider.resumeSession(
         started.value.sessionId,
+        signal,
       );
       if (signal?.aborted)
         return this.#cancelSession(
@@ -398,3 +478,23 @@ const sessionStatusOutput = (status: FridaSessionStatus) => ({
   messages: status.messages,
   messages_truncated: status.messagesTruncated,
 });
+
+const cancelledScriptEvidence = (
+  sessionId: string,
+  error: FridaScriptLoadCancelledError,
+): AnalysisCancelledError =>
+  new AnalysisCancelledError(error.operation, {
+    cause: error.cause,
+    cleanup: error.cleanup,
+    partialObservation: fridaEvidence(
+      error.operation,
+      {
+        ...scriptOutput(error.script),
+        cleanup_error: error.cleanup?.reason ?? null,
+        script_cleanup: error.cleanupIncomplete
+          ? "incomplete_or_unknown"
+          : "released",
+      },
+      { session_id: sessionId },
+    ),
+  });
