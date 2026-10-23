@@ -3,7 +3,7 @@
 
 <img src="docs/assets/personal-rea-banner.svg" alt="Personal REA — 배포된 앱에서 근거를 찾고, 복원 결과를 검증합니다" width="1200" />
 
-**앱 분석 · 패키지 추출 · APK 재빌드 · .NET 프로젝트 복원**
+**앱 분석 · APK 서명·실행 검증 · 네이티브 소스 재구성 · .NET 프로젝트 복원**
 
 **Workbench 0.2.0** · REA 엔진 6.7.0 기반 · MIT License
 
@@ -31,13 +31,15 @@
 
 ## 로컬 UI로 사용하기
 
-**Personal REA Local Studio**에서 파일 선택 → 정밀 분석 → 패키지 추출 / APK·.NET 복원·빌드를 진행합니다. .NET 앱은 실행 비교까지 이어집니다.
+**Personal REA Local Studio**에서 파일 선택 → 분석 → 복원·빌드 → 실행 비교를 진행합니다. APK는 서명·전용 에뮬레이터 설치·화면 비교까지, 네이티브 CLI는 Ghidra → Codex C/C++ 후보 → 컴파일 → 입력별 비교까지 연결됩니다.
 Mac에 설치된 **Personal REA.app** 또는 `rea-ui`로 열 수 있습니다.
 소스 checkout에서는 빌드 후 `node personal/ui/launcher.mjs`를 실행합니다.
 
 [로컬 UI 사용 설명서](docs/personal-rea-ui.md) · [형식별 복원 범위와 도구 조사](docs/personal-reconstruction-scope.md)
 
-DMG·ASAR 파일 추출, Ghidra/JADX/JavaScript 정밀 분석, Apktool 기반 미서명 APK 재빌드를 지원합니다. 추출·재빌드·실행 검증의 상태를 따로 표시합니다.
+DMG·ASAR 추출과 Ghidra/JADX/JavaScript 정밀 분석도 제공합니다. APK는 전용 테스트 키로 서명하며, 네이티브 재구성은 분석 내용을 로그인된 Codex 모델에 전송하므로 화면에서 별도 확인합니다. 각 단계의 소스·실패 로그·Evidence를 보존합니다.
+
+[APK 서명·실행 검증](docs/personal-android-runtime.md) · [네이티브 소스 재구성](docs/personal-native-recovery.md)
 
 ## 빠른 시작
 
@@ -80,17 +82,19 @@ node personal/workbench/cli.mjs project_resume '{"project":"/path/to/new-project
 
 ## 어디까지 확인했나요?
 
-| 범위                                          | 현재 상태                                                  |
-| :-------------------------------------------- | :--------------------------------------------------------- |
-| macOS 앱·DMG 및 APK 분석 경로                 | 실제 제공자 검증 기록 보유                                 |
-| Workbench의 프로젝트·증거·비교 계약           | macOS/Linux 및 Windows 검사 통과                           |
-| Windows 네이티브 EXE 실행                     | 정상·오류 종료, 시간 초과, 취소, 자식 프로세스 정리 검증   |
-| 단일 .NET WinForms 참조 앱 전체 프로젝트 복원 | DLL → C# 프로젝트 → 재빌드 → 원본 없는 실행 검증           |
-| 복원 앱의 동작 비교                           | 계산·오류 입력·초기화·저장·재시작 등 **11개 UI 사례 통과** |
-| 임의 C/C++·Electron·APK의 완전 자동 복원      | 미완료 — 대상별 분석과 구현·검증 필요                      |
+| 범위                                          | 현재 상태                                                                       |
+| :-------------------------------------------- | :------------------------------------------------------------------------------ |
+| macOS 앱·DMG 및 APK 분석 경로                 | 실제 제공자 검증 기록 보유                                                      |
+| Workbench의 프로젝트·증거·비교 계약           | macOS/Linux 및 Windows 검사 통과                                                |
+| Windows 네이티브 EXE 실행                     | 정상·오류 종료, 시간 초과, 취소, 자식 프로세스 정리 검증                        |
+| 단일 .NET WinForms 참조 앱 전체 프로젝트 복원 | DLL → C# 프로젝트 → 재빌드 → 원본 없는 실행 검증                                |
+| 복원 앱의 동작 비교                           | 계산·오류 입력·초기화·저장·재시작 등 **11개 UI 사례 통과**                      |
+| APK 재빌드·서명·Android 실행                  | 전용 ARM64 에뮬레이터에서 3개 화면 사례·취소 정리 검증                          |
+| 네이티브 C/C++ CLI 소스 재구성                | 바이너리 → 모델 생성 소스 → 빌드, 4개 기본·7개 추가 사례 및 원본 없는 실행 검증 |
+| 임의 C/C++·Electron·APK의 완전 자동 복원      | 미완료 — 대상별 분석과 구현·검증 필요                                           |
 
-**빌드 성공과 동작 일치는 다릅니다.** 복원 도구는 소스 복원과 빌드까지 수행하며,
-사용자가 지정한 앱의 실행·동작 검증은 별도로 진행해야 합니다.
+**빌드 성공과 동작 일치는 다릅니다.** UI 실행 비교는 지정한 유한 사례를 검사합니다.
+사용자 앱의 전체 기능, 실제 계정·네트워크·권한별 동작은 추가 사례로 확인해야 합니다.
 Windows 검증 환경은 GitHub의 Windows Server 2022 x64입니다.
 Windows에서 소스 checkout을 직접 실행하려면 [일치하는 native bundle 준비](docs/personal-rea-start.md#windows-setup)가 필요합니다.
 

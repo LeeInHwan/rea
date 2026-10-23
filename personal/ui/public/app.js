@@ -4,6 +4,12 @@ const names = {
   deep: "정밀 분석",
   extract: "패키지 추출",
   apk: "APK 복원 · 재빌드",
+  apk_sign: "APK 서명",
+  apk_verify: "APK 서명 · 실행 비교",
+  apk_pipeline: "APK 복원 · 서명 · 실행 비교",
+  native_recover: "네이티브 소스 재구성 · 실행 비교",
+  android: "Android 서명 · 기기 검증",
+  native: "네이티브 소스 재구성 · 검증",
   resume: "원본 재검사",
   recovery: "소스 복원 · 빌드",
   verification: "실행 비교",
@@ -42,6 +48,42 @@ const formIds = [
   "route",
   "java",
   "apktool",
+  "apk-candidate",
+  "android-sdk",
+  "serial",
+  "avd-name",
+  "android-scenarios",
+  "native-input",
+  "native-cases",
+  "native-cwd",
+  "native-attempts",
+  "compiler",
+  "codex",
+];
+const toolFields = {
+  ilspy: "ilspy",
+  dotnet: "dotnet",
+  java: "java",
+  apktool: "apktool",
+  androidSdk: "android-sdk",
+  serial: "serial",
+  avdName: "avd-name",
+  compiler: "compiler",
+  codex: "codex",
+};
+const actions = [
+  "analyze",
+  "resume",
+  "restore",
+  "verify",
+  "pipeline",
+  "deep",
+  "extract",
+  "apk",
+  "apk_sign",
+  "apk_verify",
+  "apk_pipeline",
+  "native_recover",
 ];
 async function api(path, data) {
   const response = await fetch(
@@ -82,6 +124,39 @@ function updateTools() {
     $("ilspy").value && $("dotnet").value
       ? "ILSpy · .NET SDK 경로 지정됨 · 실행 시 버전 검사"
       : "복원하려면 도구 설정에서 ILSpy와 .NET SDK 경로를 지정하세요.";
+  $("android-tool-summary").textContent = $("android-sdk").value
+    ? `SDK 지정됨 · 기기 ${$("serial").value || "미지정"} · AVD ${$("avd-name").value || "미지정"}`
+    : "Android SDK · Java · Apktool 경로와 테스트 기기를 지정하세요.";
+  $("native-tool-summary").textContent =
+    $("compiler").value && $("codex").value
+      ? "컴파일러 · Codex 지정됨 · 모델 전송 및 실제 실행 선택 필요"
+      : "컴파일러와 로그인된 Codex CLI의 경로를 지정하세요.";
+}
+function objectArray(id, label) {
+  let value;
+  try {
+    value = JSON.parse($(id).value || "[]");
+  } catch {
+    throw new Error(`${label}: 올바른 JSON 배열을 입력하세요.`);
+  }
+  if (
+    !Array.isArray(value) ||
+    !value.length ||
+    value.some(
+      (entry) => !entry || typeof entry !== "object" || Array.isArray(entry),
+    )
+  )
+    throw new Error(
+      `${label}: 하나 이상의 사례를 JSON 객체 배열로 입력하세요.`,
+    );
+  return value;
+}
+function acknowledge(id, message) {
+  if (!$(id).checked) {
+    $(id).focus();
+    throw new Error(message);
+  }
+  return true;
 }
 function args(id) {
   const value = JSON.parse($(id).value || "[]");
@@ -106,7 +181,45 @@ function inputFor(action) {
     if ($("member").value.trim()) input.assembly = $("member").value.trim();
     if (action === "deep") input.route = $("route").value;
   }
-  if (action === "apk")
+  if (["apk_sign", "apk_verify", "apk_pipeline"].includes(action)) {
+    Object.assign(input, {
+      androidSdk: $("android-sdk").value.trim(),
+      java: $("java").value.trim(),
+    });
+    if (action !== "apk_pipeline")
+      input.apkCandidate = $("apk-candidate").value.trim();
+    if (action !== "apk_sign")
+      Object.assign(input, {
+        serial: $("serial").value.trim(),
+        avdName: $("avd-name").value.trim(),
+        androidScenarios: objectArray("android-scenarios", "기기 시나리오"),
+        executeAcknowledged: acknowledge(
+          "android-execute-ack",
+          "APK 카드에서 테스트 기기 설치·실행 항목을 확인해 주세요.",
+        ),
+      });
+  }
+  if (action === "native_recover") {
+    Object.assign(input, {
+      output: $("output").value.trim(),
+      compiler: $("compiler").value.trim(),
+      codex: $("codex").value.trim(),
+      nativeCases: objectArray("native-cases", "네이티브 실행 사례"),
+      cwd: $("native-cwd").value.trim(),
+      attempts: Number($("native-attempts").value),
+      executeAcknowledged: acknowledge(
+        "native-execute-ack",
+        "네이티브 카드에서 프로그램 실행 항목을 확인해 주세요.",
+      ),
+      modelAcknowledged: acknowledge(
+        "model-ack",
+        "네이티브 카드에서 Codex 모델로 소스 전송 항목을 확인해 주세요.",
+      ),
+    });
+    if ($("native-input").value.trim())
+      input.assembly = $("native-input").value.trim();
+  }
+  if (["apk", "apk_pipeline"].includes(action))
     Object.assign(input, {
       output: $("output").value.trim(),
       java: $("java").value.trim(),
@@ -129,19 +242,11 @@ function inputFor(action) {
   return input;
 }
 function setBusy(busy) {
-  for (const id of [
-    "analyze",
-    "restore",
-    "verify",
-    "pipeline",
-    "resume",
-    "deep",
-    "extract",
-    "apk",
-  ])
+  for (const id of actions)
     $(id).disabled =
       busy ||
-      (config?.platform === "win32" && ["verify", "pipeline"].includes(id));
+      (config?.platform === "win32" &&
+        ["verify", "pipeline", "native_recover"].includes(id));
 }
 async function start(action) {
   try {
@@ -180,7 +285,12 @@ function renderJob(job) {
     $("timeline").append(row);
   }
   for (const step of ["analysis", "recovery", "verification"]) {
-    const last = job.events.filter((e) => e.step === step).at(-1);
+    const stages = {
+      analysis: ["analysis", "resume", "deep"],
+      recovery: ["recovery", "extract", "apk", "native"],
+      verification: ["verification", "android", "native"],
+    };
+    const last = job.events.filter((e) => stages[step].includes(e.step)).at(-1);
     $("step-" + step).className = `step ${last?.status || ""}`;
   }
   const busy = ["running", "cancelling"].includes(job.status);
@@ -191,6 +301,7 @@ function renderJob(job) {
   $("job-error").textContent = job.error || "";
   $("result-summary").replaceChildren();
   const r = job.result;
+  $("use-apk-result").hidden = !r?.apk?.rebuilt?.path;
   $("inventory").replaceChildren();
   if (r?.inventory) {
     const title = document.createElement("h3");
@@ -226,9 +337,58 @@ function renderJob(job) {
     );
   if (r?.apk)
     addMetric(
-      "APK 복원 · 재빌드 완료 (미서명)",
-      r.apk.rebuilt.path + " · 기기 실행 미검증",
+      "APK 복원 · 재빌드 완료",
+      r.apk.rebuilt.path +
+        (r.android
+          ? " · 서명·실행 결과는 아래에서 확인"
+          : " · 미서명 · 기기 실행 미검증"),
     );
+  if (r?.android) {
+    const labels = {
+      signed: "APK 테스트 서명 완료",
+      verified: "Android 지정 사례 비교 통과",
+      "behavior-mismatch": "Android 동작 차이 발견",
+      "needs-review": "Android 검증 결과 확인 필요",
+    };
+    addMetric(
+      labels[r.android.status] ||
+        `Android 상태: ${r.android.status || "미확인"}`,
+      r.android.receipt_path ||
+        r.android.signed?.path ||
+        "전체 결과에서 서명·기기 실행 근거를 확인하세요.",
+    );
+    if (r.android.status === "signed")
+      addMetric(
+        "기기 실행은 별도 단계",
+        "테스트 서명 완료만으로 설치·실행 성공을 판정하지 않습니다.",
+      );
+  }
+  if (r?.native) {
+    const labels = {
+      verified: "네이티브 지정 사례 비교 통과",
+      "behavior-mismatch": "네이티브 동작 차이 발견",
+      "build-failed": "재구성 소스 빌드 실패",
+      "needs-review": "네이티브 결과 확인 필요",
+    };
+    addMetric(
+      labels[r.native.status] ||
+        `네이티브 상태: ${r.native.status || "미확인"}`,
+      r.native.output_directory ||
+        r.native.candidate ||
+        "전체 결과에서 복원 근거를 확인하세요.",
+    );
+    if (r.native.coverage)
+      addMetric(
+        "함수 분석 범위",
+        typeof r.native.coverage === "string"
+          ? r.native.coverage
+          : JSON.stringify(r.native.coverage),
+      );
+    addMetric(
+      "비교 범위: 지정한 명령행 사례",
+      "선택한 입력의 출력·종료 상태 비교입니다. 원본 소스 일치나 앱 전체 동등성 판정이 아닙니다.",
+    );
+  }
   if (r?.recovery)
     addMetric(
       "C# 프로젝트 복원 · 빌드 완료",
@@ -276,6 +436,8 @@ function renderResult() {
               deep: r.deep,
               extraction: r.extract,
               apk: r.apk,
+              android: r.android,
+              native: r.native,
               output: r.rebuilt_directory,
               inventory: r.inventory,
               execution_observations: r.execution_observations,
@@ -315,7 +477,7 @@ async function history() {
       .filter(Boolean)
       .pop();
     const date = document.createElement("small");
-    date.textContent = `${new Date(job.created).toLocaleString("ko-KR")} · ${job.input.action}`;
+    date.textContent = `${new Date(job.created).toLocaleString("ko-KR")} · ${names[job.input.action] || job.input.action}`;
     title.append(date);
     const state = document.createElement("span");
     state.textContent = statuses[job.status] || job.status;
@@ -324,7 +486,6 @@ async function history() {
       for (const [key, id] of Object.entries({
         project: "project",
         target: "target",
-        assembly: "assembly",
         output: "output",
         ilspy: "ilspy",
         dotnet: "dotnet",
@@ -332,11 +493,43 @@ async function history() {
         route: "route",
         java: "java",
         apktool: "apktool",
+        apkCandidate: "apk-candidate",
+        androidSdk: "android-sdk",
+        serial: "serial",
+        avdName: "avd-name",
+        compiler: "compiler",
+        codex: "codex",
+        attempts: "native-attempts",
       }))
         if (job.input[key]) $(id).value = job.input[key];
+      if (["restore", "pipeline"].includes(job.input.action))
+        $("assembly").value = job.input.assembly || "";
       $("member").value = ["deep", "extract"].includes(job.input.action)
         ? job.input.assembly || ""
         : "";
+      if (job.input.action === "native_recover") {
+        $("native-input").value = job.input.assembly || "";
+        $("native-cwd").value = job.input.cwd || config.home;
+      }
+      if (job.input.nativeCases)
+        $("native-cases").value = JSON.stringify(
+          job.input.nativeCases,
+          null,
+          2,
+        );
+      if (job.input.androidScenarios)
+        $("android-scenarios").value = JSON.stringify(
+          job.input.androidScenarios,
+          null,
+          2,
+        );
+      for (const id of [
+        "execute-ack",
+        "android-execute-ack",
+        "native-execute-ack",
+        "model-ack",
+      ])
+        $(id).checked = false;
       for (const side of ["original", "candidate"])
         if (job.input[side]) {
           $(side).value = job.input[side].executable;
@@ -429,15 +622,20 @@ for (const button of document.querySelectorAll("[data-location]"))
       }[button.dataset.location],
     );
 $("tools-open").onclick = () => $("tools-dialog").showModal();
+for (const button of document.querySelectorAll("[data-tools-open]"))
+  button.onclick = () => $("tools-dialog").showModal();
 $("tools-close").onclick = () => $("tools-dialog").close();
 $("tools-save").onclick = async () => {
   try {
-    await api("/api/settings", {
-      ilspy: $("ilspy").value,
-      dotnet: $("dotnet").value,
-      java: $("java").value,
-      apktool: $("apktool").value,
-    });
+    await api(
+      "/api/settings",
+      Object.fromEntries(
+        Object.entries(toolFields).map(([key, id]) => [
+          key,
+          $(id).value.trim(),
+        ]),
+      ),
+    );
   } catch (error) {
     toast(error.message);
     return;
@@ -447,17 +645,7 @@ $("tools-save").onclick = async () => {
   $("tools-dialog").close();
   toast("도구 경로를 저장했습니다.");
 };
-for (const action of [
-  "analyze",
-  "resume",
-  "restore",
-  "verify",
-  "pipeline",
-  "deep",
-  "extract",
-  "apk",
-])
-  $(action).onclick = () => start(action);
+for (const action of actions) $(action).onclick = () => start(action);
 $("cancel").onclick = async () => {
   try {
     await api("/api/cancel", { id: currentJob.id });
@@ -465,6 +653,17 @@ $("cancel").onclick = async () => {
   } catch (e) {
     toast(e.message);
   }
+};
+$("use-apk-result").onclick = () => {
+  const candidate = currentJob?.result?.apk?.rebuilt?.path;
+  if (!candidate) return;
+  $("apk-candidate").value = candidate;
+  remember();
+  $("apk-candidate").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("apk-candidate").focus({ preventScroll: true });
+  toast(
+    "복원된 APK를 선택했습니다. 서명 또는 기기 실행 비교를 이어서 진행하세요.",
+  );
 };
 $("refresh-history").onclick = () => history().catch((e) => toast(e.message));
 for (const button of document.querySelectorAll("[data-result]"))
@@ -489,6 +688,7 @@ $("download").onclick = () => {
 for (const id of formIds)
   $(id).addEventListener("change", () => {
     updateTarget();
+    updateTools();
     remember();
   });
 async function init() {
@@ -501,10 +701,9 @@ async function init() {
   $("project").value = `${config.projects}/project-${stamp}`;
   $("output").value = `${config.projects}/recovery-${stamp}`;
   $("cwd").value = config.home;
-  $("ilspy").value = config.settings.ilspy || "";
-  $("dotnet").value = config.settings.dotnet || "";
-  $("java").value = config.settings.java || "";
-  $("apktool").value = config.settings.apktool || "";
+  $("native-cwd").value = config.home;
+  for (const [key, id] of Object.entries(toolFields))
+    $(id).value = config.settings[key] || "";
   try {
     const saved = JSON.parse(localStorage.getItem("rea-ui-form") || "{}");
     for (const id of formIds) if (saved[id]) $(id).value = saved[id];
@@ -526,6 +725,13 @@ $("new-project").onclick = () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   $("project").value = `${config.projects}/project-${stamp}`;
   $("output").value = `${config.projects}/recovery-${stamp}`;
+  for (const id of [
+    "execute-ack",
+    "android-execute-ack",
+    "native-execute-ack",
+    "model-ack",
+  ])
+    $(id).checked = false;
   remember();
   toast("새 프로젝트와 복원 결과 경로를 준비했습니다.");
 };

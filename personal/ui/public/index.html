@@ -32,7 +32,7 @@
       <header>
         <div class="breadcrumb">워크스페이스 <span>/</span> 분석 스튜디오</div>
         <div class="local-chip">
-          <span class="dot"></span> LOCAL ONLY <span id="host">MAC</span>
+          <span class="dot"></span> LOCAL WORKSPACE <span id="host">MAC</span>
         </div>
       </header>
       <section class="intro">
@@ -50,7 +50,7 @@
         </div>
         <div id="step-recovery" class="step">
           <span>02</span>
-          <div><b>복원 · 빌드</b><small>패키지 추출 · APK · .NET</small></div>
+          <div><b>복원 · 빌드</b><small>APK · .NET · 네이티브</small></div>
         </div>
         <div id="step-verification" class="step">
           <span>03</span>
@@ -98,6 +98,12 @@
                 ···
               </button>
             </div>
+            <label for="output">복원 결과를 저장할 새 폴더</label
+            ><input id="output" spellcheck="false" />
+            <p class="micro">
+              아래 APK · 네이티브 · .NET 복원에서 공통으로 사용합니다. 새
+              복원마다 비어 있는 새 경로를 지정하세요.
+            </p>
             <div class="actions">
               <button class="primary" id="analyze">
                 원본 분석 시작 <span>→</span></button
@@ -146,26 +152,155 @@
               추출은 배포 파일을 꺼내는 작업입니다. 네이티브 기계어에서 원본
               C/C++ 프로젝트 전체를 자동 복원하지는 않습니다.
             </p>
-            <hr />
-            <h3>APK 복원 · 재빌드</h3>
+          </section>
+          <section class="card" id="android-lab">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">02—03 / ANDROID</span>
+                <h2>APK 복원부터 기기 검증까지</h2>
+              </div>
+              <span class="tag">SMALI · DEVICE</span>
+            </div>
             <p class="hint">
-              등록한 APK의 Smali·리소스를 복원하고 새 APK를 만듭니다. 아래 복원
-              결과 폴더를 사용합니다. 도구 설정에서 Java와 Apktool 3.0.3 JAR을
-              지정하세요.
+              Smali·리소스를 복원해 APK를 빌드하고 테스트 키로 서명합니다.
+              선택한 Android 에뮬레이터에서 원본과 후보에 같은 시나리오를 적용해
+              실행 결과를 비교합니다.
             </p>
-            <button class="secondary full" id="apk">
-              APK 복원 후 재빌드 ↗
+            <div class="route-chain" aria-label="APK 작업 순서">
+              <span>복원 · 빌드</span><b>→</b><span>서명</span><b>→</b
+              ><span>설치 · 비교</span>
+            </div>
+            <div class="tool-summary" id="android-tool-summary"></div>
+            <button class="text-button" data-tools-open>
+              Android SDK · 기기 설정 열기 ↗
+            </button>
+            <label for="apk-candidate"
+              >이미 빌드한 APK <span>서명·실행만 할 때 사용</span></label
+            >
+            <div class="path-row">
+              <input
+                id="apk-candidate"
+                placeholder="/path/to/rebuilt-unsigned.apk"
+                spellcheck="false"
+              /><button
+                data-browse="apk-candidate"
+                aria-label="후보 APK 찾아보기"
+              >
+                찾기
+              </button>
+            </div>
+            <label for="android-scenarios">기기 시나리오 · JSON 배열</label>
+            <textarea id="android-scenarios" rows="4" spellcheck="false">
+[{"name":"기본 실행","waitMs":1000}]</textarea>
+            <p class="micro">
+              각 시나리오에 taps: [{"x":100,"y":200}], keys: ["BACK"], waitMs를
+              지정할 수 있습니다. 좌표는 선택한 기기 화면 기준입니다.
+            </p>
+            <label class="check"
+              ><input type="checkbox" id="android-execute-ack" /><span
+                >선택한 테스트 에뮬레이터에 원본과 후보 APK를 설치·실행합니다.
+                앱 데이터 초기화와 테스트 패키지 정리가 포함됨을
+                확인했습니다.</span
+              ></label
+            >
+            <button class="primary full" id="apk_pipeline">
+              APK 복원 → 서명 → 설치·실행 비교
+            </button>
+            <div class="actions wrap">
+              <button id="apk">복원 · 재빌드만</button
+              ><button id="apk_sign">후보 APK 서명</button
+              ><button id="apk_verify">후보 서명 · 실행 비교</button>
+            </div>
+            <p class="micro">
+              테스트 서명은 원본 개발자의 서명이 아닙니다. 서명에 의존하는
+              로그인·서비스와 지정하지 않은 화면의 동작은 별도로 확인해야
+              합니다.
+            </p>
+          </section>
+          <section class="card" id="native-lab">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">02—03 / NATIVE</span>
+                <h2>네이티브 소스 재구성 · 실행 비교</h2>
+              </div>
+              <span class="tag">실험적 · CLI</span>
+            </div>
+            <p class="hint">
+              Ghidra의 함수 분석을 바탕으로 Codex가 C/C++ 소스를 재구성합니다.
+              이 컴퓨터의 컴파일러로 빌드한 뒤 원본과 후보를 같은 인자로
+              실행합니다.
+            </p>
+            <label for="native-input"
+              >복원할 네이티브 실행 파일 <span>비우면 등록한 원본</span></label
+            >
+            <div class="path-row">
+              <input
+                id="native-input"
+                placeholder="/path/to/native-executable"
+                spellcheck="false"
+              /><button
+                data-browse="native-input"
+                aria-label="네이티브 실행 파일 찾아보기"
+              >
+                찾기
+              </button>
+            </div>
+            <div class="tool-summary" id="native-tool-summary"></div>
+            <button class="text-button" data-tools-open>
+              컴파일러 · Codex 설정 열기 ↗
+            </button>
+            <label for="native-cases">실행 비교 사례 · JSON 배열</label>
+            <textarea id="native-cases" rows="4" spellcheck="false">
+[{"name":"기본 실행","args":[]}]</textarea>
+            <div class="compare-grid">
+              <div>
+                <label for="native-cwd">공통 작업 폴더</label>
+                <div class="path-row">
+                  <input id="native-cwd" spellcheck="false" /><button
+                    data-browse="native-cwd"
+                    aria-label="네이티브 작업 폴더 찾아보기"
+                  >
+                    찾기
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label for="native-attempts">소스 보완 최대 시도</label
+                ><select id="native-attempts">
+                  <option value="1">1회</option>
+                  <option value="2" selected>2회</option>
+                  <option value="3">3회</option>
+                </select>
+              </div>
+            </div>
+            <label class="check"
+              ><input type="checkbox" id="model-ack" /><span
+                >디컴파일된 소스·복원 근거를 로그인된 Codex의 모델에 전달합니다.
+                설정된 서비스로 전송되며 해당 계정의 사용량이 발생할 수
+                있습니다.</span
+              ></label
+            >
+            <label class="check"
+              ><input type="checkbox" id="native-execute-ack" /><span
+                >원본과 재구성된 프로그램을 이 컴퓨터에서 내 권한으로
+                실행합니다. 파일·네트워크 접근이 가능한 실제 실행임을
+                확인했습니다.</span
+              ></label
+            >
+            <button class="primary full" id="native_recover">
+              소스 재구성 → 빌드 → 실행 비교
             </button>
             <p class="micro">
-              결과: 서명되지 않은 APK. Java/Kotlin 원본 복원·서명·기기 실행
-              검증은 포함하지 않습니다.
+              현재 호스트에서 실행 가능한 C/C++ 명령행 프로그램 대상입니다. 원본
+              소스의 정확한 복원이나 GUI 앱 전체의 동등성을 보장하지 않습니다.
+              함수 분석 범위와 사례별 차이를 결과에 남깁니다.
             </p>
           </section>
           <section class="card">
             <div class="card-heading">
               <div>
                 <span class="section-number">02 / RECONSTRUCT</span>
-                <h2>소스 복원 · 빌드</h2>
+                <h2>.NET 소스 복원 · 빌드</h2>
               </div>
               <span class="tag">.NET 전용</span>
             </div>
@@ -183,8 +318,6 @@
                 ···
               </button>
             </div>
-            <label for="output">복원 결과를 저장할 새 폴더</label
-            ><input id="output" spellcheck="false" />
             <div class="tool-summary" id="tool-summary">
               ILSpy · .NET SDK 경로를 도구 설정에서 지정하세요.
             </div>
@@ -312,6 +445,9 @@
               <pre id="result-json" tabindex="0"></pre>
               <p class="receipt-path" id="receipt-path"></p>
               <div class="actions">
+                <button id="use-apk-result" hidden>
+                  복원된 APK로 서명·실행 준비
+                </button>
                 <button id="download">결과 JSON 저장 ↓</button
                 ><button id="cancel" class="danger" hidden>작업 취소</button>
               </div>
@@ -340,7 +476,8 @@
             </p>
             <button id="pipeline" class="primary full">전체 과정 실행 →</button>
             <p class="micro">
-              지원 대상: 단일 .NET 실행 앱. 각 단계 실패 시 중단하고 기록을
+              이 버튼의 지원 대상: 단일 .NET 실행 앱. APK와 네이티브는 각 카드의
+              전체 과정 버튼을 사용하세요. 각 단계 실패 시 중단하고 기록을
               보존합니다.
             </p>
           </section>
@@ -427,6 +564,46 @@
           찾기
         </button>
       </div>
+      <hr />
+      <h3>Android 서명 · 기기 실행</h3>
+      <label for="android-sdk">Android SDK 폴더</label>
+      <div class="path-row">
+        <input id="android-sdk" spellcheck="false" /><button
+          data-browse="android-sdk"
+        >
+          찾기
+        </button>
+      </div>
+      <div class="compare-grid">
+        <div>
+          <label for="serial">테스트 에뮬레이터 serial</label
+          ><input id="serial" placeholder="emulator-5554" spellcheck="false" />
+        </div>
+        <div>
+          <label for="avd-name">테스트 AVD 이름</label
+          ><input id="avd-name" placeholder="REA_Test" spellcheck="false" />
+        </div>
+      </div>
+      <hr />
+      <h3>네이티브 소스 재구성</h3>
+      <label for="compiler">C/C++ 컴파일러 실행 파일</label>
+      <div class="path-row">
+        <input
+          id="compiler"
+          placeholder="/usr/bin/clang"
+          spellcheck="false"
+        /><button data-browse="compiler">찾기</button>
+      </div>
+      <label for="codex">로그인된 Codex CLI 실행 파일</label>
+      <div class="path-row">
+        <input id="codex" spellcheck="false" /><button data-browse="codex">
+          찾기
+        </button>
+      </div>
+      <p class="micro">
+        네이티브 소스 재구성만 모델을 사용합니다. 모델 전송과 실제 실행은 해당
+        작업 카드에서 선택합니다.
+      </p>
       <button class="primary full" id="tools-save">도구 설정 저장</button>
     </dialog>
     <div role="status" class="toast" id="toast" hidden></div>

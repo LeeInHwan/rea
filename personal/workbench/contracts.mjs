@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { reconstructionSpecificationSchema } from "../../dist/domain/reconstructionVerificationSchemas.js";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 const path = z.string().min(1);
 const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);

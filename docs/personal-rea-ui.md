@@ -155,3 +155,9 @@ node personal/ui/artifact-proof.mjs /absolute/path/new-proof
 
 실제 APK decode/build/JADX 분석, ASAR 추출/JS 분석, macOS에서는 자체 생성 DMG 추출과
 자체 컴파일한 Mach-O의 Ghidra 분석을 확인합니다. Android 앱 실행이나 네이티브 전체 재구현을 검증하는 테스트는 아닙니다.
+
+## APK 서명·기기 검증과 네이티브 재구성
+
+APK 카드의 **복원 → 서명 → 설치·실행 비교**는 Apktool 재빌드 결과를 전용 테스트 키로 서명하고 지정한 전용 AVD에서 원본과 후보의 화면·프로세스·크래시를 비교합니다. 이미 만든 APK에는 서명만 또는 설치·비교만 수행할 수 있습니다. SDK 경로와 에뮬레이터 serial/AVD 이름을 도구 설정에서 지정합니다. 원본 앱이 이미 설치된 기기는 거부합니다. [APK 상세 안내](personal-android-runtime.md)를 참고하세요.
+
+네이티브 카드에는 C/C++ 컴파일러, Codex CLI, 실행 파일, 공통 작업 폴더와 사례별 인자를 지정합니다. 실행 확인과 모델 전송 확인은 별개이며 새 작업마다 확인합니다. [재구성 흐름과 판정 범위](personal-native-recovery.md)를 먼저 확인하세요. 두 흐름 모두 작업 기록에 결과와 receipt 경로를 남기며 중단할 수 있습니다.

@@ -184,6 +184,8 @@ export async function qualifyRuntime(checkout, run) {
         "personal/workbench/update.test.mjs",
         "personal/workbench/managed-restore.test.mjs",
         "personal/ui/server.test.mjs",
+        "personal/ui/android-runtime.test.mjs",
+        "personal/ui/native-recovery.test.mjs",
       ],
     ],
     ["npm", ["run", "test:focused", "--", ...tests]],

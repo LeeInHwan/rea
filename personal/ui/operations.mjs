@@ -1,4 +1,10 @@
-import { analyzeArtifact, rebuildApk } from "./artifact-workflows.mjs";
+import { recoverNative } from "./native-recovery.mjs";
+import { signAndVerifyApk } from "./android-runtime.mjs";
+import {
+  analyzeArtifact,
+  rebuildApk,
+  selectedArtifact,
+} from "./artifact-workflows.mjs";
 import { mkdir, writeFile, realpath } from "node:fs/promises";
 import { join, isAbsolute, relative } from "node:path";
 import { z } from "zod";
@@ -34,6 +40,10 @@ export const requestSchema = z
       "deep",
       "extract",
       "apk",
+      "apk_sign",
+      "apk_verify",
+      "apk_pipeline",
+      "native_recover",
       "resume",
       "restore",
       "verify",
@@ -47,6 +57,53 @@ export const requestSchema = z
     java: path.optional(),
     apktool: path.optional(),
     output: path.optional(),
+    apkCandidate: path.optional(),
+    androidSdk: path.optional(),
+    serial: z
+      .string()
+      .regex(/^emulator-\d+$/)
+      .optional(),
+    avdName: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .optional(),
+    compiler: path.optional(),
+    codex: path.optional(),
+    attempts: z.number().int().min(1).max(3).default(2),
+    modelAcknowledged: z.boolean().default(false),
+    nativeCases: z
+      .array(
+        z.strictObject({
+          name: z.string().min(1).max(80),
+          args: z.array(z.string().max(4096)).max(100),
+        }),
+      )
+      .min(1)
+      .max(20)
+      .optional(),
+    androidScenarios: z
+      .array(
+        z.strictObject({
+          name: z.string().min(1).max(80),
+          taps: z
+            .array(
+              z.strictObject({
+                x: z.number().int().min(0).max(4096),
+                y: z.number().int().min(0).max(4096),
+              }),
+            )
+            .max(10)
+            .optional(),
+          keys: z
+            .array(z.enum(["BACK", "ENTER", "TAB"]))
+            .max(10)
+            .optional(),
+          waitMs: z.number().int().min(0).max(10000).optional(),
+        }),
+      )
+      .min(1)
+      .max(5)
+      .optional(),
     ilspy: path.optional(),
     dotnet: path.optional(),
     original: command.optional(),
@@ -62,6 +119,17 @@ export const requestSchema = z
       deep: ["route"],
       extract: [],
       apk: ["output", "java", "apktool"],
+      apk_sign: ["apkCandidate", "androidSdk", "java"],
+      apk_verify: ["apkCandidate", "androidSdk", "java", "serial", "avdName"],
+      apk_pipeline: [
+        "output",
+        "java",
+        "apktool",
+        "androidSdk",
+        "serial",
+        "avdName",
+      ],
+      native_recover: ["output", "compiler", "codex", "cwd"],
       resume: [],
       export: ["destination"],
       restore: ["assembly", "output", "ilspy", "dotnet"],
@@ -77,6 +145,21 @@ export const requestSchema = z
         "cwd",
       ],
     }[input.action];
+    if (
+      ["apk_verify", "apk_pipeline", "native_recover"].includes(input.action) &&
+      !input.executeAcknowledged
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["executeAcknowledged"],
+        message: "원본·후보 실행 확인이 필요합니다.",
+      });
+    if (input.action === "native_recover" && !input.modelAcknowledged)
+      ctx.addIssue({
+        code: "custom",
+        path: ["modelAcknowledged"],
+        message: "분석 결과 모델 전송 확인이 필요합니다.",
+      });
     for (const key of required)
       if (!input[key])
         ctx.addIssue({
@@ -121,8 +204,35 @@ export async function runOperation(input, directory, progress, signal) {
   if (["deep", "extract"].includes(input.action)) {
     await stage(input.action, () => analyzeArtifact(input, directory, signal));
   }
-  if (input.action === "apk") {
+  if (["apk", "apk_pipeline"].includes(input.action)) {
     await stage("apk", () => rebuildApk(input, directory, signal));
+  }
+  if (["apk_sign", "apk_verify", "apk_pipeline"].includes(input.action)) {
+    const selected = await selectedArtifact(input.project);
+    if (selected.inventory.normalized_result.manifest.root_format !== "apk")
+      throw new Error("APK 원본 프로젝트가 필요합니다.");
+    await stage("android", () =>
+      signAndVerifyApk(
+        {
+          original: selected.path,
+          candidate: result.apk?.rebuilt.path || input.apkCandidate,
+          androidSdk: input.androidSdk,
+          java: input.java,
+          serial: input.serial,
+          avdName: input.avdName,
+          executeAcknowledged:
+            input.action !== "apk_sign" && input.executeAcknowledged,
+          scenarios: input.androidScenarios,
+        },
+        directory,
+        signal,
+      ),
+    );
+  }
+  if (input.action === "native_recover") {
+    await stage("native", () =>
+      recoverNative(input, directory, signal, progress),
+    );
   }
   if (["restore", "pipeline"].includes(input.action)) {
     const recovery = await stage("recovery", () =>

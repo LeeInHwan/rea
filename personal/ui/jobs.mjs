@@ -54,6 +54,7 @@ export async function createJobs(stateDir, runner) {
     } catch (error) {
       job.status = controller.signal.aborted ? "cancelled" : "failed";
       job.error = error.message;
+      if (error.receipt_path) job.receipt_path = error.receipt_path;
     } finally {
       job.finished = new Date().toISOString();
       try {

@@ -396,11 +396,14 @@ select:focus {
   gap: 6px;
 }
 .path-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 8px 11px;
   color: #8a9881;
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 20px;
 }
@@ -948,4 +951,46 @@ dialog::backdrop {
   background: #f9e5dd;
   color: #a25c48;
   border-color: #f1dcd3;
+}
+
+.route-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  background: #f4f8ee;
+  border: 1px solid #e3ebd9;
+  border-radius: 9px;
+  font-size: 10px;
+  color: #577144;
+}
+.route-chain b {
+  color: #a0b58b;
+  font-weight: 400;
+}
+#android-lab,
+#native-lab {
+  scroll-margin-top: 20px;
+}
+#native-lab .tag {
+  background: #faf4e9;
+  border-color: #ede0c9;
+  color: #96763e;
+}
+#tools-dialog {
+  max-height: 88vh;
+  overflow: auto;
+}
+#tools-dialog h3 {
+  font-size: 13px;
+  margin: 21px 0 8px;
+}
+#tools-dialog hr {
+  margin-top: 24px;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.metric {
+  overflow-wrap: anywhere;
 }

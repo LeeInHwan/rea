@@ -167,17 +167,43 @@ async function postRoute(req, url, context, send) {
     if (
       !value ||
       Object.keys(value).some(
-        (key) => !["ilspy", "dotnet", "java", "apktool"].includes(key),
+        (key) =>
+          ![
+            "ilspy",
+            "dotnet",
+            "java",
+            "apktool",
+            "androidSdk",
+            "compiler",
+            "codex",
+            "serial",
+            "avdName",
+          ].includes(key),
       )
     )
       throw new Error("지원하지 않는 설정입니다.");
-    for (const key of ["ilspy", "dotnet", "java", "apktool"])
+    for (const key of [
+      "ilspy",
+      "dotnet",
+      "java",
+      "apktool",
+      "androidSdk",
+      "compiler",
+      "codex",
+    ])
       if (
         value[key] !== undefined &&
         (typeof value[key] !== "string" ||
           (value[key] && !isAbsolute(value[key])))
       )
         throw new Error("도구의 절대 경로를 지정하세요.");
+    for (const key of ["serial", "avdName"])
+      if (
+        value[key] !== undefined &&
+        (typeof value[key] !== "string" ||
+          !/^[A-Za-z0-9_.-]{0,100}$/.test(value[key]))
+      )
+        throw new Error("기기 이름 형식을 확인하세요.");
     await writeFile(
       join(stateDir, "settings.json"),
       JSON.stringify(value, null, 2),

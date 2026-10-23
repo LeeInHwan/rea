@@ -22,6 +22,9 @@ try {
   if (error.code !== "ENOENT") throw error;
 }
 for (const [key, path] of Object.entries({
+  compiler: "/usr/bin/clang++",
+  codex: join(home, ".local/bin/codex"),
+  androidSdk: "/opt/homebrew/share/android-commandlinetools",
   dotnet: join(home, ".local/share/rea-personal/tools/dotnet-10.0.100/dotnet"),
   ilspy: join(
     home,
@@ -39,10 +42,23 @@ for (const [key, path] of Object.entries({
 })) {
   if (settings[key]) continue;
   try {
-    if ((await lstat(path)).isFile()) settings[key] = path;
+    const info = await lstat(path);
+    if (
+      info.isFile() ||
+      info.isSymbolicLink() ||
+      (key === "androidSdk" && info.isDirectory())
+    )
+      settings[key] = path;
   } catch {
     /* Tool acquisition is separate; preserve caller choices. */
   }
+}
+try {
+  await lstat(join(home, ".android/avd/personal_rea_api35.ini"));
+  settings.avdName ||= "personal_rea_api35";
+  settings.serial ||= "emulator-5580";
+} catch {
+  /* Dedicated AVD creation is separate. */
 }
 const nextSettings = JSON.stringify(settings, null, 2);
 if (nextSettings !== priorSettings) {

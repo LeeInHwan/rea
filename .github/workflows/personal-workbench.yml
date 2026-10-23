@@ -28,5 +28,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:cached
-      - run: node --test personal/workbench/workbench.test.mjs personal/workbench/update.test.mjs personal/workbench/managed-restore.test.mjs personal/ui/server.test.mjs
+      - run: node --test personal/workbench/workbench.test.mjs personal/workbench/update.test.mjs personal/workbench/managed-restore.test.mjs personal/ui/server.test.mjs personal/ui/android-runtime.test.mjs personal/ui/native-recovery.test.mjs
       - run: npm run test:focused -- tests/acceptance/emptyTargetPathCli.test.ts tests/boundary/mcp/artifactMcp.test.ts tests/boundary/providers/native/artifactProvider.extractionFormat.test.ts tests/boundary/providers/native/nativeDmgArtifactReader.test.ts tests/boundary/cli/evidenceBundleCommands.test.ts tests/boundary/filesystem/evidenceBundleFiles.test.ts

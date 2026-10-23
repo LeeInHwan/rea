@@ -28,7 +28,9 @@
 
 `personal/ui/artifact-proof.mjs`는 도구 경로를 명시한 환경에서 실제 APK decode/build와 JADX 분석,
 ASAR 추출/JS 분석, macOS 자체 생성 DMG 추출과 자체 컴파일 Mach-O의 Ghidra 분석을 수행합니다.
-출력 APK는 미서명 상태로 남기며 Android 기기에 설치하거나 앱을 실행하지 않습니다.
+기본 APK 재빌드는 미서명 상태로 남깁니다. 추가한 [서명·전용 에뮬레이터 검증](personal-android-runtime.md)을 선택하면 테스트 서명과 설치·실행·화면 비교까지 진행합니다.
+
+네이티브는 [Ghidra → Codex C/C++ 재구성 → 빌드 → CLI 사례 비교](personal-native-recovery.md)를 추가했습니다. 원본 위치의 실행 관찰과 원본 접근을 차단한 후보 실행을 비교하며, 범용 GUI 앱 전체 복원은 별도 과제입니다.
 검사용 소형 fixture의 성공을 임의 상용 앱이나 전체 앱 복원 성공으로 일반화하지 않습니다.
 
 기본 HTTP 검사에는 실제 ASAR 추출·JS 분석, 등록하지 않은 파일 및 변경된 파일의 거부가 포함됩니다.
