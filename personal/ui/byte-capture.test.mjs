@@ -22,6 +22,8 @@ test(
             ],
             working_directory: root,
             timeout_ms: 15000,
+            // Loaded CI hosts still need two process-group observations.
+            settle_ms: 3000,
             normalization: { paths: false, pids: false, ports: false },
           });
         const a = await capture([0x80, 10]),
@@ -36,7 +38,17 @@ test(
         const c = await capture([0xef, 0xbf, 0xbd, 10]),
           d = await capture([0xef, 0xbf, 0xbd, 10]);
         assert.equal(compareObservations(c, d).output_equal, true);
-        assert.equal(compareObservations(c, d).completed, true);
+        assert.equal(
+          compareObservations(c, d).completed,
+          true,
+          JSON.stringify(
+            [c, d].map(({ normalized_result: value }) => ({
+              exit: value.exit,
+              settlement: value.settlement,
+              unknowns: value.residual_unknowns,
+            })),
+          ),
+        );
         const edited = await call("capture_process_scenario", {
           executable: process.execPath,
           arguments: [
