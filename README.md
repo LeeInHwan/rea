@@ -29,6 +29,14 @@
 
 <a id="personal-quick-start"></a>
 
+## 로컬 UI로 사용하기
+
+**Personal REA Local Studio**에서 파일 선택 → 분석 → .NET 복원·빌드 → 실행 비교를 한 화면에서 진행합니다.
+Mac에 설치된 **Personal REA.app** 또는 `rea-ui`로 열 수 있습니다.
+소스 checkout에서는 빌드 후 `node personal/ui/launcher.mjs`를 실행합니다.
+
+[로컬 UI 사용 설명서](docs/personal-rea-ui.md) · 실제 단계·로그·증거·실패 상태를 표시합니다.
+
 ## 빠른 시작
 
 ### 1. 처음 내려받았다면

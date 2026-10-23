@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Personal REA · Local Studio</title>
+    <link rel="icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/"
+        ><img src="/icon.svg" alt="" /><span
+          >REA<span class="brand-sub">PERSONAL STUDIO</span></span
+        ></a
+      >
+      <div class="workspace-label">WORKSPACE</div>
+      <a class="nav active" href="#workspace"><span>◈</span> 분석 스튜디오</a
+      ><a class="nav" href="#history"><span>◷</span> 작업 기록</a
+      ><button class="nav" id="tools-open"><span>⚙</span> 도구 설정</button>
+      <div class="sidebar-note">
+        <span class="dot"></span> 이 컴퓨터에서 실행
+        <p>파일과 분석 결과를<br />로컬 작업 공간에 보관합니다.</p>
+      </div>
+      <div class="sidebar-footer">
+        PERSONAL REA <span id="version">—</span
+        ><small>Built on REA · Evidence first</small>
+      </div>
+    </aside>
+    <main id="workspace">
+      <header>
+        <div class="breadcrumb">워크스페이스 <span>/</span> 분석 스튜디오</div>
+        <div class="local-chip">
+          <span class="dot"></span> LOCAL ONLY <span id="host">MAC</span>
+        </div>
+      </header>
+      <section class="intro">
+        <div>
+          <div class="eyebrow">FROM ARTIFACT TO EVIDENCE</div>
+          <h1>앱의 안쪽을, 한눈에.</h1>
+          <p>배포된 파일에서 시작해 분석하고, 복원하고, 직접 검증하세요.</p>
+        </div>
+        <span class="version-pill">LOCAL STUDIO <b>01</b></span>
+      </section>
+      <div class="steps">
+        <div id="step-analysis" class="step">
+          <span>01</span>
+          <div><b>원본 분석</b><small>파일 구성 · 해시 · 근거</small></div>
+        </div>
+        <div id="step-recovery" class="step">
+          <span>02</span>
+          <div><b>복원 · 빌드</b><small>단일 .NET 앱 → C# 프로젝트</small></div>
+        </div>
+        <div id="step-verification" class="step">
+          <span>03</span>
+          <div><b>실행 검증</b><small>원본과 후보의 관찰 비교</small></div>
+        </div>
+        <div class="step">
+          <span>04</span>
+          <div><b>증거 보관</b><small>결과 · 로그 · 비교 기록</small></div>
+        </div>
+      </div>
+      <div class="workspace-grid">
+        <div class="input-column">
+          <section class="card source-card">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">01 / SOURCE</span>
+                <h2>분석할 원본</h2>
+              </div>
+              <span class="tag">읽기 전용 분석</span>
+            </div>
+            <button class="file-zone" id="choose-target">
+              <span class="file-icon">▧</span
+              ><strong id="target-label">파일 또는 폴더 선택</strong
+              ><span>설치된 앱 · 실행 파일 · DMG · APK · 설치 폴더</span
+              ><span class="choose-pill">내 컴퓨터에서 찾아보기 ↗</span>
+            </button>
+            <label for="target">원본 경로</label>
+            <div class="path-row">
+              <input
+                id="target"
+                placeholder="/Applications/Example.app"
+                spellcheck="false"
+              /><button data-browse="target" aria-label="원본 찾아보기">
+                ···
+              </button>
+            </div>
+            <label for="project"
+              >프로젝트 저장 위치 <span>새 폴더에 자동 생성</span></label
+            >
+            <div class="path-row">
+              <input id="project" spellcheck="false" /><button
+                data-browse="project"
+                aria-label="기존 프로젝트 찾아보기"
+              >
+                ···
+              </button>
+            </div>
+            <div class="actions">
+              <button class="primary" id="analyze">
+                원본 분석 시작 <span>→</span></button
+              ><button id="resume">기존 프로젝트 열기</button
+              ><button id="new-project">새 프로젝트</button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">02 / RECONSTRUCT</span>
+                <h2>소스 복원 · 빌드</h2>
+              </div>
+              <span class="tag">.NET 전용</span>
+            </div>
+            <p class="hint">
+              등록한 원본 안의 실행 DLL을 C# 프로젝트로 복원합니다. 네이티브·APK
+              전체 복원은 아직 지원하지 않습니다.
+            </p>
+            <label for="assembly">.NET 실행 어셈블리</label>
+            <div class="path-row">
+              <input
+                id="assembly"
+                placeholder="/path/to/App.dll"
+                spellcheck="false"
+              /><button data-browse="assembly" aria-label="어셈블리 찾아보기">
+                ···
+              </button>
+            </div>
+            <label for="output">복원 결과를 저장할 새 폴더</label
+            ><input id="output" spellcheck="false" />
+            <div class="tool-summary" id="tool-summary">
+              ILSpy · .NET SDK 경로를 도구 설정에서 지정하세요.
+            </div>
+            <button class="secondary full" id="restore">
+              소스 복원 후 빌드 <span>↗</span>
+            </button>
+          </section>
+          <section class="card">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">03 / VERIFY</span>
+                <h2>실제로 실행하고 비교</h2>
+              </div>
+              <span class="tag">터미널 관찰</span>
+            </div>
+            <p class="hint">
+              같은 작업 폴더에서 원본과 후보를 차례로 실행합니다. .NET DLL은
+              실행 파일에 <code>dotnet</code>, 인자에 DLL의 절대 경로를
+              넣으세요.
+            </p>
+            <div class="compare-grid">
+              <div>
+                <label for="original">원본 실행 파일</label>
+                <div class="path-row">
+                  <input
+                    id="original"
+                    spellcheck="false"
+                    placeholder="/absolute/path/to/executable"
+                  /><button
+                    data-browse="original"
+                    aria-label="원본 실행 파일 찾아보기"
+                  >
+                    ···
+                  </button>
+                </div>
+                <label for="original-args">원본 인자 · JSON 배열</label
+                ><textarea id="original-args" rows="2" spellcheck="false">
+[]</textarea>
+              </div>
+              <div>
+                <label for="candidate">후보 실행 파일</label>
+                <div class="path-row">
+                  <input
+                    id="candidate"
+                    spellcheck="false"
+                    placeholder="/absolute/path/to/rebuilt"
+                  /><button
+                    data-browse="candidate"
+                    aria-label="후보 실행 파일 찾아보기"
+                  >
+                    ···
+                  </button>
+                </div>
+                <label for="candidate-args">후보 인자 · JSON 배열</label
+                ><textarea id="candidate-args" rows="2" spellcheck="false">
+[]</textarea>
+              </div>
+            </div>
+            <div class="compare-grid">
+              <div>
+                <label for="cwd">공통 작업 폴더</label>
+                <div class="path-row">
+                  <input id="cwd" spellcheck="false" /><button
+                    data-browse="cwd"
+                    aria-label="작업 폴더 찾아보기"
+                  >
+                    ···
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label for="timeout">실행 제한 시간</label
+                ><select id="timeout">
+                  <option value="15000">15초 / 프로그램</option>
+                  <option value="30000">30초 / 프로그램</option>
+                  <option value="60000">60초 / 프로그램</option>
+                  <option value="120000">120초 / 프로그램</option>
+                </select>
+              </div>
+            </div>
+            <label class="check"
+              ><input type="checkbox" id="execute-ack" /><span
+                >선택한 프로그램을 내 권한으로 실행합니다. 파일·네트워크 접근이
+                가능한 실제 실행임을 확인했습니다.</span
+              ></label
+            >
+            <button id="prepare-execution" class="full">
+              선택한 .NET 앱으로 실행 경로 채우기</button
+            ><button class="secondary full" id="verify">
+              원본 ↔ 후보 실행 비교
+            </button>
+            <p class="micro">
+              화면 클릭·설치·네트워크 동작 전체의 일치 판정은 포함하지 않습니다.
+            </p>
+          </section>
+        </div>
+        <div class="result-column">
+          <section class="card results-card">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">LIVE WORKSPACE</span>
+                <h2>진행 상황과 결과</h2>
+              </div>
+              <span class="status" id="job-status">준비됨</span>
+            </div>
+            <div id="empty-state">
+              <div class="orb">⌘</div>
+              <h3>원본을 선택하면 시작됩니다.</h3>
+              <p>분석 결과와 실행 근거를<br />이곳에서 확인할 수 있습니다.</p>
+              <div class="empty-tags">
+                <span>로컬 파일</span><span>변조 확인</span
+                ><span>증거 저장</span>
+              </div>
+            </div>
+            <div id="job-content" hidden>
+              <div id="job-title"></div>
+              <div class="timeline" id="timeline"></div>
+              <div id="result-summary"></div>
+              <div class="error" id="job-error" hidden></div>
+              <div class="result-tabs">
+                <button class="selected" data-result="summary">요약</button
+                ><button data-result="raw">전체 결과</button>
+              </div>
+              <pre id="result-json" tabindex="0"></pre>
+              <p class="receipt-path" id="receipt-path"></p>
+              <div class="actions">
+                <button id="download">결과 JSON 저장 ↓</button
+                ><button id="cancel" class="danger" hidden>작업 취소</button>
+              </div>
+            </div>
+          </section>
+          <section class="callout">
+            <span>◉</span>
+            <div>
+              <b>빌드 성공 ≠ 동작 일치</b>
+              <p>
+                확인한 범위만 결과로 표시합니다.<br />미실행·불확실·실패를
+                성공으로 바꾸지 않습니다.
+              </p>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-heading">
+              <div>
+                <span class="section-number">ONE WORKFLOW</span>
+                <h2>전체 과정 이어서 실행</h2>
+              </div>
+            </div>
+            <p class="hint">
+              원본·새 프로젝트·복원 도구·후보 실행 경로까지 입력했다면 분석 →
+              복원·빌드 → 실행 비교를 순서대로 진행합니다.
+            </p>
+            <button id="pipeline" class="primary full">전체 과정 실행 →</button>
+            <p class="micro">
+              지원 대상: 단일 .NET 실행 앱. 각 단계 실패 시 중단하고 기록을
+              보존합니다.
+            </p>
+          </section>
+          <section class="card" id="history">
+            <div class="card-heading">
+              <h2>최근 작업</h2>
+              <button class="text-button" id="refresh-history">새로고침</button>
+            </div>
+            <div id="history-list" class="history-empty">
+              아직 작업이 없습니다.
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer>
+        Personal REA · 내 컴퓨터에서 분석하고, 근거로 확인합니다.<span
+          id="platform-note"
+          >macOS · Linux 실행 비교 지원</span
+        >
+      </footer>
+    </main>
+    <dialog id="browser-dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="section-number">LOCAL FILES</span>
+          <h2 id="browser-title">파일 또는 폴더 선택</h2>
+        </div>
+        <button id="browser-close" aria-label="파일 선택 닫기">✕</button>
+      </div>
+      <div class="browser-toolbar">
+        <button id="browser-up" aria-label="상위 폴더">↑</button
+        ><input
+          id="browser-path"
+          aria-label="탐색할 폴더 경로"
+          spellcheck="false"
+        /><button id="browser-go">이동</button>
+      </div>
+      <div class="favorites">
+        <button data-location="home">홈</button
+        ><button data-location="applications">응용 프로그램</button
+        ><button data-location="downloads">다운로드</button
+        ><button data-location="projects">REA 프로젝트</button>
+      </div>
+      <div id="browser-error" class="error" hidden></div>
+      <div id="browser-list"></div>
+      <div class="browser-bottom">
+        <span id="browser-count"></span
+        ><button class="primary" id="browser-select">현재 폴더 선택</button>
+      </div>
+    </dialog>
+    <dialog id="tools-dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="section-number">LOCAL TOOLCHAIN</span>
+          <h2>복원 도구 설정</h2>
+        </div>
+        <button id="tools-close" aria-label="설정 닫기">✕</button>
+      </div>
+      <p class="hint">
+        ILSpy 11.1.0.9782와 호환 .NET SDK를 사용합니다. 도구 버전은 복원 시
+        실제로 검사합니다.
+      </p>
+      <label for="ilspy">ILSpy 실행 파일</label>
+      <div class="path-row">
+        <input id="ilspy" spellcheck="false" /><button data-browse="ilspy">
+          찾기
+        </button>
+      </div>
+      <label for="dotnet">dotnet 실행 파일</label>
+      <div class="path-row">
+        <input id="dotnet" spellcheck="false" /><button data-browse="dotnet">
+          찾기
+        </button>
+      </div>
+      <button class="primary full" id="tools-save">도구 설정 저장</button>
+    </dialog>
+    <div role="status" class="toast" id="toast" hidden></div>
+  </body>
+</html>

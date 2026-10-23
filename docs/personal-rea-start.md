@@ -4,6 +4,8 @@
 
 [첫 화면](../README.md) · [전체 명령과 설계](personal-rea-workbench.md) · [분석 엔진 준비](personal-fork-ko.md)
 
+> **화면으로 사용하기:** [Personal REA Local Studio](personal-rea-ui.md)에서 파일 선택·분석·복원·빌드·실행 비교를 진행할 수 있습니다.
+
 ## 1. 먼저 알아두기
 
 Personal REA는 두 부분으로 구성됩니다.

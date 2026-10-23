@@ -181,6 +181,7 @@ export async function qualifyRuntime(checkout, run) {
         "personal/workbench/workbench.test.mjs",
         "personal/workbench/update.test.mjs",
         "personal/workbench/managed-restore.test.mjs",
+        "personal/ui/server.test.mjs",
       ],
     ],
     ["npm", ["run", "test:focused", "--", ...tests]],

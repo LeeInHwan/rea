@@ -8,8 +8,16 @@ import {
   lstat,
   realpath,
 } from "node:fs/promises";
-import { join, resolve, basename, isAbsolute } from "node:path";
-import { DOMParser } from "@xmldom/xmldom";
+import {
+  join,
+  resolve,
+  basename,
+  isAbsolute,
+  dirname,
+  relative,
+  sep,
+} from "node:path";
+import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import {
   runOwnedCommand,
   prepareOwnedCommand,
@@ -46,6 +54,57 @@ export async function treeFiles(root, prefix = "") {
     else throw new Error(`Unsupported recovered output entry: ${name}`);
   }
   return result;
+}
+
+// ILSpy sometimes emits HintPath even for the selected SDK's own runtime assemblies.
+// Remove only references proven to be direct files in that SDK's framework runtime.
+// Application references and paths outside this root still fail normal admission.
+export async function normalizeFrameworkReferences(projectFile, dotnet) {
+  const original = await readFile(projectFile, "utf8");
+  const errors = [];
+  const doc = new DOMParser({
+    onError: (level, message) => errors.push(`${level}: ${message}`),
+  }).parseFromString(original, "application/xml");
+  if (errors.length) throw new Error("Invalid recovered project XML");
+  const root = await realpath(
+    join(dirname(await realpath(dotnet)), "shared", "Microsoft.NETCore.App"),
+  );
+  const removed = [];
+  for (const hint of Array.from(doc.getElementsByTagName("HintPath"))) {
+    const reference = hint.parentNode;
+    if (
+      reference?.nodeName !== "Reference" ||
+      reference.attributes.length !== 1 ||
+      hint.attributes.length ||
+      Array.from(reference.childNodes).filter((node) => node.nodeType === 1)
+        .length !== 1
+    )
+      continue;
+    const name = reference.getAttribute("Include");
+    if (!/^[A-Za-z0-9_.]+$/.test(name)) continue;
+    const value = hint.textContent.trim();
+    if (/[$@%]\(/.test(value)) continue;
+    const file = await realpath(resolve(dirname(projectFile), value));
+    const parts = relative(root, file).split(sep);
+    if (
+      parts.length !== 2 ||
+      !/^\d+\.\d+\.\d+$/.test(parts[0]) ||
+      parts[1] !== `${name}.dll`
+    )
+      continue;
+    removed.push({
+      assembly: name,
+      path: file,
+      sha256: await fileDigest(file),
+    });
+    reference.parentNode.removeChild(reference);
+  }
+  if (removed.length)
+    await writeFile(projectFile, new XMLSerializer().serializeToString(doc));
+  return {
+    original_project_sha256: sha256(original),
+    framework_references: removed,
+  };
 }
 
 export function inspectRecoveredProject(xml) {
@@ -280,9 +339,14 @@ export async function restoreManaged(input, state, inventory, signal) {
     if (projects.length !== 1)
       throw new Error("Expected exactly one reconstructed project");
     const projectFile = join(sources, projects[0].path);
+    receipt.framework_resolution = await normalizeFrameworkReferences(
+      projectFile,
+      input.dotnet_command,
+    );
     receipt.project = inspectRecoveredProject(
       await readFile(projectFile, "utf8"),
     );
+    receipt.recovered_sources = await treeFiles(sources);
     // Prevent ambient repo MSBuild/response-file customizations from affecting the recovered project.
     await run("build", input.dotnet_command, [
       "build",
