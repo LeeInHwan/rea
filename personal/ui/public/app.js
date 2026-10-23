@@ -165,6 +165,26 @@ function renderJob(job) {
   $("job-error").textContent = job.error || "";
   $("result-summary").replaceChildren();
   const r = job.result;
+  $("inventory").replaceChildren();
+  if (r?.inventory) {
+    const title = document.createElement("h3");
+    title.textContent = `분석한 구성 요소 · ${r.inventory.displayed} / ${r.inventory.total}`;
+    $("inventory").append(title);
+    const list = document.createElement("div");
+    list.className = "inventory-list";
+    for (const entry of r.inventory.entries) {
+      const row = document.createElement("div");
+      row.className = "inventory-entry";
+      const name = document.createElement("span");
+      name.textContent = entry.path;
+      name.title = entry.sha256 || "해시 미확인";
+      const format = document.createElement("small");
+      format.textContent = entry.format + " · " + entry.hash_status;
+      row.append(name, format);
+      list.append(row);
+    }
+    $("inventory").append(list);
+  }
   if (r?.plan)
     addMetric("원본 정체성 보관됨", `SHA-256 ${r.plan.target.sha256}`);
   if (r?.recovery)
@@ -212,6 +232,7 @@ function renderResult() {
               revision: r.plan?.revision,
               rebuild: r.recovery?.status,
               output: r.rebuilt_directory,
+              inventory: r.inventory,
               execution_observations: r.execution_observations,
               comparison: r.verification?.normalized_result,
               features: r.plan?.features,

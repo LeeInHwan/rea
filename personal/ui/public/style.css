@@ -916,3 +916,36 @@ dialog::backdrop {
     display: none;
   }
 }
+
+#inventory h3 {
+  font-size: 11px;
+  color: #718461;
+  margin: 20px 0 10px;
+}
+.inventory-list {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #e8ecdf;
+  border-radius: 7px;
+}
+.inventory-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-bottom: 1px solid #eef1e8;
+  font-size: 10px;
+}
+.inventory-entry span {
+  overflow-wrap: anywhere;
+}
+.inventory-entry small {
+  font-size: 9px;
+  color: #95a283;
+  flex-shrink: 0;
+}
+.step.failed > span {
+  background: #f9e5dd;
+  color: #a25c48;
+  border-color: #f1dcd3;
+}

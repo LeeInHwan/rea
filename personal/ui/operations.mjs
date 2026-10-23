@@ -224,5 +224,28 @@ export async function runOperation(input, directory, progress, signal) {
     { project: input.project },
     { signal },
   );
+  const saved = await load(input.project);
+  const inventory = saved.bundle.records.find(
+    (record) => record.evidence_id === saved.state.target.inventory_evidence_id,
+  );
+  if (inventory) {
+    const graph = inventory.normalized_result;
+    const nodes = new Map(graph.nodes.map((node) => [node.artifact_id, node]));
+    result.inventory = {
+      evidence_id: inventory.evidence_id,
+      coverage: graph.coverage,
+      total: graph.occurrences.length,
+      displayed: Math.min(200, graph.occurrences.length),
+      entries: graph.occurrences.slice(0, 200).map((entry) => ({
+        path: entry.logical_path,
+        format: entry.artifact_format,
+        kind: entry.artifact_kind,
+        sha256: nodes.get(entry.artifact_id)?.sha256 ?? null,
+        size: nodes.get(entry.artifact_id)?.size ?? null,
+        hash_status: entry.hash_status,
+      })),
+      limitations: graph.limitations,
+    };
+  }
   return result;
 }
