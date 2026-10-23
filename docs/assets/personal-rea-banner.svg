@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+<title id="title">Personal REA</title><desc id="desc">배포된 앱에서 근거를 찾고, 복원 결과를 검증합니다. Inspect, retain evidence, reconstruct, verify.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101d36"/><stop offset="1" stop-color="#163d54"/></linearGradient></defs>
+<rect width="1200" height="330" rx="22" fill="url(#bg)"/>
+<circle cx="1080" cy="36" r="210" fill="#40d4c2" opacity=".06"/>
+<circle cx="1180" cy="310" r="230" fill="#549cff" opacity=".08"/>
+<g font-family="Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">
+<text x="58" y="56" font-size="14" letter-spacing="3" fill="#70e1d4">ARTIFACT TO EVIDENCE</text>
+<text x="54" y="125" font-size="57" font-weight="700" fill="#ffffff">Personal REA</text>
+<text x="58" y="168" font-size="23" fill="#d5e5f1">배포된 앱에서 근거를 찾고, 복원 결과를 검증합니다.</text>
+<g font-size="15" fill="#d6e5f3" text-anchor="middle">
+<rect x="58" y="222" width="220" height="57" rx="10" fill="#ffffff" fill-opacity=".07" stroke="#65809a"/><text x="168" y="257">01  INSPECT</text>
+<rect x="296" y="222" width="220" height="57" rx="10" fill="#ffffff" fill-opacity=".07" stroke="#65809a"/><text x="406" y="257">02  EVIDENCE</text>
+<rect x="534" y="222" width="220" height="57" rx="10" fill="#ffffff" fill-opacity=".07" stroke="#65809a"/><text x="644" y="257">03  RECONSTRUCT</text>
+<rect x="772" y="222" width="220" height="57" rx="10" fill="#70e1d4" fill-opacity=".12" stroke="#70e1d4"/><text x="882" y="257" fill="#91f1e4">04  VERIFY</text>
+</g><text x="1128" y="58" font-size="15" fill="#91f1e4" text-anchor="end">WORKBENCH 0.2</text>
+</g></svg>

@@ -1,3 +1,117 @@
+<!-- PERSONAL-REA:START -->
+<div align="center">
+
+<img src="docs/assets/personal-rea-banner.svg" alt="Personal REA — 배포된 앱에서 근거를 찾고, 복원 결과를 검증합니다" width="1200" />
+
+**앱 분석 · 증거 저장 · 기능 비교 · .NET 프로젝트 복원**
+
+**Workbench 0.2.0** · REA 엔진 6.7.0 기반 · MIT License
+
+[빠른 시작](#personal-quick-start) · [사용 설명서](docs/personal-rea-start.md) · [기능과 설계](docs/personal-rea-workbench.md) · [Windows 검증 기록](https://github.com/LeeInHwan/rea/actions/runs/39846750693)
+
+</div>
+
+## 소스가 없어도, 배포된 앱부터 시작합니다
+
+설치된 앱, 실행 파일, 설치 폴더, DMG 또는 APK를 입력하면 내부 구성과 분석 경로를 확인할 수 있습니다.
+조사 결과는 원본 파일의 해시와 함께 저장하고, 원본과 복원 후보의 차이를 근거로 검증합니다.
+
+이 저장소는 **공식 REA에 개인 Workbench를 추가한 포크**입니다.
+공식 분석 엔진을 유지하면서 프로젝트 재개, 기능별 검증, .NET 앱 복원 흐름을 제공합니다.
+
+| 원하는 작업                  | 사용하는 기능                         | 얻는 결과                           |
+| :--------------------------- | :------------------------------------ | :---------------------------------- |
+| 앱 안에 무엇이 있는지 확인   | `inspect-artifact`                    | 구성 파일·형식·후속 분석 제안       |
+| 분석을 저장하고 이어서 진행  | `project_create` · `project_resume`   | 원본 해시에 연결된 프로젝트와 증거  |
+| 원본과 후보의 구성 비교      | `artifact_compare` · `feature_verify` | 비교 근거와 `pass / fail / unknown` |
+| .NET 앱을 C# 프로젝트로 복원 | `restore_managed_application`         | 복원 소스·재빌드 결과·명령 로그     |
+| 결과를 다른 사람에게 전달    | `project_export`                      | 기능 계약·증거·검증 결과 패키지     |
+
+<a id="personal-quick-start"></a>
+
+## 빠른 시작
+
+### 1. 처음 내려받았다면
+
+Node.js **24.18.0**, npm **11.16.0**을 준비합니다. 아래는 macOS/Linux 기준입니다.
+Gitea 사용자는 저장소 상단 **복제** 버튼의 URL을 사용하면 됩니다.
+
+```sh
+git clone https://github.com/LeeInHwan/rea.git
+cd rea
+npm ci
+npm run build:cached
+node personal/workbench/cli.mjs --help
+```
+
+### 2. 앱의 구조를 확인합니다
+
+```sh
+node scripts/rea.mjs inspect-artifact '/Applications/Example.app' --json
+```
+
+`Example.app`을 실제 앱·설치 폴더·실행 파일 경로로 바꿉니다.
+이 단계는 파일을 검사하고 다음 분석을 제안합니다. 대상 앱을 실행하거나 모든 코드를 복원하는 명령은 아닙니다.
+
+### 3. 프로젝트를 만들어 분석을 이어갑니다
+
+```sh
+node personal/workbench/cli.mjs project_create '{"project":"/path/to/new-project","target":"/path/to/original-app"}'
+node personal/workbench/cli.mjs project_plan '{"project":"/path/to/new-project"}'
+node personal/workbench/cli.mjs project_resume '{"project":"/path/to/new-project"}'
+```
+
+프로젝트는 **원본 밖의 새 폴더**에 만듭니다. 원본이 바뀌면 재개를 거부하므로 새 프로젝트로 분석합니다.
+이미 개인 런타임이 설치된 환경에서는 각각 `rea`, `rea-workbench` 단축 명령을 사용할 수 있습니다.
+
+> **처음 사용하는 분:** [설치부터 비교·복원·결과 공유까지 따라 하기](docs/personal-rea-start.md)
+>
+> **AI 에이전트에서 사용하는 분:** [MCP 연결과 요청 예시](docs/personal-rea-start.md#agent-use)
+
+## 어디까지 확인했나요?
+
+| 범위                                          | 현재 상태                                                  |
+| :-------------------------------------------- | :--------------------------------------------------------- |
+| macOS 앱·DMG 및 APK 분석 경로                 | 실제 제공자 검증 기록 보유                                 |
+| Workbench의 프로젝트·증거·비교 계약           | macOS/Linux 및 Windows 검사 통과                           |
+| Windows 네이티브 EXE 실행                     | 정상·오류 종료, 시간 초과, 취소, 자식 프로세스 정리 검증   |
+| 단일 .NET WinForms 참조 앱 전체 프로젝트 복원 | DLL → C# 프로젝트 → 재빌드 → 원본 없는 실행 검증           |
+| 복원 앱의 동작 비교                           | 계산·오류 입력·초기화·저장·재시작 등 **11개 UI 사례 통과** |
+| 임의 C/C++·Electron·APK의 완전 자동 복원      | 미완료 — 대상별 분석과 구현·검증 필요                      |
+
+**빌드 성공과 동작 일치는 다릅니다.** 복원 도구는 소스 복원과 빌드까지 수행하며,
+사용자가 지정한 앱의 실행·동작 검증은 별도로 진행해야 합니다.
+Windows 검증 환경은 GitHub의 Windows Server 2022 x64입니다.
+Windows에서 소스 checkout을 직접 실행하려면 [일치하는 native bundle 준비](docs/personal-rea-start.md#windows-setup)가 필요합니다.
+
+## 문서 바로가기
+
+| 문서                                                           | 이런 경우에 읽으세요                               |
+| :------------------------------------------------------------- | :------------------------------------------------- |
+| [한국어 사용 설명서](docs/personal-rea-start.md)               | 처음 설치하고 실제 명령을 따라 실행할 때           |
+| [Workbench 설계·명령·업데이트](docs/personal-rea-workbench.md) | 프로젝트 구조, 9개 도구, 자동 업데이트를 이해할 때 |
+| [아티팩트별 분석과 엔진 준비](docs/personal-fork-ko.md)        | Ghidra·JADX·DMG 분석 환경을 준비할 때              |
+| [외부 포크 조사](docs/fork-research-20261023.md)               | RE-Agent·RECarve에서 참고한 설계를 확인할 때       |
+
+<details>
+<summary><strong>공식 버전 업데이트는 어떻게 하나요?</strong></summary>
+
+공식 stable release를 격리 작업 공간에 병합하고, 빌드·MCP/CLI·정적 검사·문서 검사를
+통과한 후보만 개인 main과 설치 런타임으로 전환합니다. 충돌이나 검사 실패 시 기존 런타임을 유지합니다.
+현재 자동 업데이트는 소유자의 Mac 환경에 구성되어 있습니다. 이 저장소를 clone하는 것만으로 예약 실행이 등록되지는 않습니다.
+Windows CI는 별도 검사입니다. 로컬 업데이트 통과가 모든 플랫폼의 실행 검증 통과를 의미하지는 않습니다.
+
+</details>
+
+---
+
+## 공식 REA 안내
+
+아래는 원본 프로젝트의 소개와 설치 안내입니다. `npx rea-agents`는 공식 엔진을 설치하며,
+이 포크의 `personal/workbench` 기능은 위 소스 설치 또는 별도로 구성된 개인 런타임을 사용합니다.
+
+<!-- PERSONAL-REA:END -->
+
 <div align="center">
 
 **English** · [简体中文](docs/readme/README_zh.md) · [繁體中文](docs/readme/README_zh-TW.md) · [日本語](docs/readme/README_ja.md) · [한국어](docs/readme/README_ko.md) · [Türkçe](docs/readme/README_tr.md) · [Русский](docs/readme/README_ru.md) · [Tiếng Việt](docs/readme/README_vi.md) · [ไทย](docs/readme/README_th.md) · [Deutsch](docs/readme/README_de.md) · [Español](docs/readme/README_es.md) · [Français](docs/readme/README_fr.md) · [Українська](docs/readme/README_uk.md) · [Polski](docs/readme/README_pl.md) · [Português (Brasil)](docs/readme/README_pt-BR.md) · [العربية](docs/readme/README_ar.md) · [فارسی](docs/readme/README_fa.md) · [Bahasa Indonesia](docs/readme/README_id.md) · [Italiano](docs/readme/README_it.md)

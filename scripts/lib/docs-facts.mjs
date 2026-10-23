@@ -1,3 +1,4 @@
+import { upstreamReadme } from "./readme-sections.mjs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -32,7 +33,7 @@ const readmeDestinations = (content) => [
 ];
 
 const readmeLinkTargets = (root, from, content, language = "en") =>
-  readmeDestinations(content)
+  readmeDestinations(upstreamReadme(content))
     .map((match) => repoRelative(root, from, match[1] ?? ""))
     .filter(
       (target) => !target.startsWith("#") && !isLanguageNavigation(target),
