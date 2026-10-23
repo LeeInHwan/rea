@@ -54,7 +54,12 @@ for (const [key, path] of Object.entries({
   }
 }
 try {
-  await lstat(join(home, ".android/avd/personal_rea_api35.ini"));
+  await lstat(
+    join(
+      home,
+      ".local/share/rea-personal/android-avd/personal_rea_api35.owner.json",
+    ),
+  );
   settings.avdName ||= "personal_rea_api35";
   settings.serial ||= "emulator-5580";
 } catch {
