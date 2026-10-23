@@ -49,10 +49,6 @@ export function normalizeAndroidHierarchy(xml, packageName) {
   }).parseFromString(xml, "application/xml");
   if (errors.length || doc.documentElement?.tagName !== "hierarchy")
     throw new Error("Invalid Android UI hierarchy");
-  const nodes = Array.from(doc.getElementsByTagName("node")).filter(
-    (n) => n.getAttribute("package") === packageName,
-  );
-  if (!nodes.length) throw new Error("Target package has no visible UI nodes");
   const attributes = [
     "text",
     "resource-id",
@@ -68,9 +64,26 @@ export function normalizeAndroidHierarchy(xml, packageName) {
     "selected",
     "bounds",
   ];
-  return nodes.map((node) =>
-    Object.fromEntries(attributes.map((key) => [key, node.getAttribute(key)])),
-  );
+  const result = [];
+  const visit = (parent, path) => {
+    const children = Array.from(parent.childNodes).filter(
+      (node) => node.nodeType === 1 && node.nodeName === "node",
+    );
+    children.forEach((node, index) => {
+      const location = [...path, index];
+      if (node.getAttribute("package") === packageName)
+        result.push({
+          path: location,
+          ...Object.fromEntries(
+            attributes.map((key) => [key, node.getAttribute(key)]),
+          ),
+        });
+      visit(node, location);
+    });
+  };
+  visit(doc.documentElement, []);
+  if (!result.length) throw new Error("Target package has no visible UI nodes");
+  return result;
 }
 
 export function validateAndroidScenarios(value) {

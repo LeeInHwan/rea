@@ -166,6 +166,11 @@ export async function qualifyRuntime(checkout, run) {
   if (`npm@${npmVersion}` !== metadata.packageManager)
     throw new Error(`Required package manager: ${metadata.packageManager}`);
   const tests = [
+    "src/process/capture/ProcessCaptureUtf8.test.ts",
+    "src/process/capture/ProcessCaptureTerminalRetention.test.ts",
+    "src/process/capture/ProcessCaptureObservation.test.ts",
+    "src/process/capture/ProcessCaptureLifecycle.test.ts",
+    "src/process/capture/ProcessHarness.test.ts",
     "tests/acceptance/emptyTargetPathCli.test.ts",
     "tests/boundary/mcp/artifactMcp.test.ts",
     "tests/boundary/providers/native/artifactProvider.extractionFormat.test.ts",
@@ -186,6 +191,9 @@ export async function qualifyRuntime(checkout, run) {
         "personal/ui/server.test.mjs",
         "personal/ui/android-runtime.test.mjs",
         "personal/ui/native-recovery.test.mjs",
+        "personal/ui/adversarial.test.mjs",
+        "personal/ui/workspace-owner.test.mjs",
+        "personal/ui/byte-capture.test.mjs",
       ],
     ],
     ["npm", ["run", "test:focused", "--", ...tests]],

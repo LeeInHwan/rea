@@ -13,6 +13,7 @@ import { assertOutsideTarget, json } from "../workbench/store.mjs";
 import { withEngine } from "../workbench/engine.mjs";
 import { fileDigest, owned } from "../workbench/managed-restore.mjs";
 
+import { compareObservations } from "./execution-observations.mjs";
 export const sourceSchema = z.strictObject({
   files: z
     .array(z.strictObject({ name: z.string(), content: z.string() }))
@@ -51,24 +52,7 @@ export function validateSources(value, addresses) {
   return { ...parsed, missing: addresses.filter((a) => !mapped.includes(a)) };
 }
 
-export function compareObservations(left, right) {
-  const a = left.normalized_result,
-    b = right.normalized_result;
-  const raw = (v) => v.frames.map((f) => f.raw_data ?? f.data).join("");
-  const exit = (v) =>
-    v.exit?.reason === "exited" &&
-    Number.isInteger(v.exit?.code) &&
-    v.settlement?.state === "quiesced";
-  return {
-    original_output: raw(a),
-    candidate_output: raw(b),
-    output_equal: a.truncated || b.truncated ? null : raw(a) === raw(b),
-    original_exit: a.exit,
-    candidate_exit: b.exit,
-    exit_equal: JSON.stringify(a.exit) === JSON.stringify(b.exit),
-    completed: exit(a) && exit(b),
-  };
-}
+export { compareObservations };
 
 export function nativeDenyProfile(paths) {
   return `(version 1)(allow default)${paths.map((p) => `(deny file-read* (literal ${JSON.stringify(p)}))(deny process-exec (literal ${JSON.stringify(p)}))`).join("")}`;
@@ -466,6 +450,9 @@ export async function recoverNative(
           receipt.status =
             sources.missing.length ||
             sources.unknowns.length ||
+            record.comparisons.some(
+              (c) => c.output_equal === null || !c.completed,
+            ) ||
             process.platform !== "darwin"
               ? "needs-review"
               : equal

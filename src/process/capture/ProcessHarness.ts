@@ -291,8 +291,17 @@ const startCaptureRuntime = async (
       cols: scenario.terminal.columns,
       rows: scenario.terminal.rows,
       name: "xterm-256color",
+      encoding: "utf8",
     });
     options.onSpawn(terminal.pid);
+    // Keep the fork\u0027s UTF-8 terminal/input flags. The pinned backend exposes
+    // setEncoding for the readable stream; latin1 transports each byte losslessly.
+    const byteTerminal = terminal as IPty & {
+      setEncoding?: (encoding: string) => void;
+    };
+    if (typeof byteTerminal.setEncoding !== "function")
+      throw new Error("PTY backend lacks a lossless byte transport.");
+    byteTerminal.setEncoding("latin1");
     options.observationBuffer.target_pid = {
       state: "available",
       value: scenario.normalization.pids ? 1 : terminal.pid,
@@ -303,6 +312,7 @@ const startCaptureRuntime = async (
     );
     const terminalRetention = captureTerminalFrames({
       ...options,
+      byteEncoding: "latin1",
       terminal,
       started,
       onOutput: () => (lastOutput = monotonicProcessCaptureClock()),
@@ -582,14 +592,17 @@ const completeCapture = async (options: {
     throw cause;
   }
   options.observationBuffer.manifest = { state: "available", value: manifest };
+  const terminalRetention = runtime.terminalRetention();
   return buildCaptureResult({
+    terminalDecodingUnknown: terminalRetention.decoding_unknown,
     frames: options.frames,
     exit: { ...options.exit, reason },
     samples: options.samples,
     before: options.before,
     after,
     truncationDetails: {
-      ...runtime.terminalRetention(),
+      raw_terminal: terminalRetention.raw_terminal,
+      normalized_terminal: terminalRetention.normalized_terminal,
       rendered_terminal: runtime.renderer.retention(),
       filesystem_before: options.before.coverage,
       filesystem_after: after.coverage,

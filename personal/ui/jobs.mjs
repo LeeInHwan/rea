@@ -2,24 +2,38 @@ import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
+import { acquireWorkspace } from "./workspace-owner.mjs";
+import { rename } from "node:fs/promises";
 const summary = (job) => {
   const { result: _result, ...rest } = job;
   return rest;
 };
 export async function createJobs(stateDir, runner) {
+  const workspace = await acquireWorkspace(stateDir);
   const root = join(stateDir, "jobs");
-  await mkdir(root, { recursive: true, mode: 0o700 });
+  await mkdir(root, { recursive: true, mode: 0o700 }).catch(async (error) => {
+    await workspace.release();
+    throw error;
+  });
   const jobs = new Map();
   let active = null,
     starting = null,
     closing = false;
-  const save = (job) =>
-    writeFile(join(root, job.id, "job.json"), JSON.stringify(job, null, 2), {
+  const save = async (job) => {
+    const directory = join(root, job.id),
+      temporary = join(directory, `.job-${randomUUID()}.json`);
+    await writeFile(temporary, JSON.stringify(job, null, 2), {
       mode: 0o600,
+      flag: "wx",
     });
-  for (const id of (await readdir(root)).filter((x) =>
-    /^[a-f0-9-]{36}$/.test(x),
-  )) {
+    await rename(temporary, join(directory, "job.json"));
+  };
+  for (const id of (
+    await readdir(root).catch(async (error) => {
+      await workspace.release();
+      throw error;
+    })
+  ).filter((x) => /^[a-f0-9-]{36}$/.test(x))) {
     try {
       const job = JSON.parse(
         await readFile(join(root, id, "job.json"), "utf8"),
@@ -73,6 +87,7 @@ export async function createJobs(stateDir, runner) {
       created: new Date().toISOString(),
       status: "running",
       input,
+      owner: workspace.owner,
       events: [],
       result: null,
       error: null,
@@ -87,6 +102,10 @@ export async function createJobs(stateDir, runner) {
     return summary(job);
   }
   return {
+    owner: {
+      pid: workspace.owner.pid,
+      start_identity: workspace.owner.start_identity,
+    },
     get active() {
       return active?.id ?? null;
     },
@@ -124,6 +143,7 @@ export async function createJobs(stateDir, runner) {
       }
       active?.controller.abort();
       await active?.task;
+      await workspace.release();
     },
   };
 }

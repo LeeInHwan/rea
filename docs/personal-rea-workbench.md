@@ -1,4 +1,4 @@
-# Personal REA Workbench 0.2
+# Personal REA Workbench 0.3.1
 
 ## 제품 구조와 조사 결과
 
@@ -212,3 +212,5 @@ Windows 재검증까지 완료했다고 보지 않는다.
 ## 개인 UI의 추가 실행 경로
 
 Local Studio에 APK 서명·전용 AVD 설치·화면 비교와 macOS/Linux 네이티브 C/C++ 후보 재구성 경로를 추가했다. 기존 Workbench Evidence 계약과 명령을 대체하지 않는 개인 UI 확장이다. 자세한 범위는 [Android 실행](personal-android-runtime.md)과 [네이티브 재구성](personal-native-recovery.md)에 기록한다. 자동 업데이트 qualification은 두 경로의 입력·동의·결과 판정 경계 검사도 포함한다. 실제 모델 재구성과 에뮬레이터 실행 증거는 별도 opt-in proof로 수집하며 일반 로컬 gate 통과와 혼동하지 않는다.
+
+0.3.1은 PTY의 잘못된 UTF-8 출력을 terminal unknown으로 보존하고, UI 작업 공간의 프로세스 시작 정체성과 배타 소유권을 검사한다. 자동 업데이트 qualification에는 실제 MCP의 잘못된 바이트 출력, 작업 중 서버 교체 거부, 실제 소유 프로세스 종료 후 복구, Android 트리 구조 변경 회귀 검사가 포함된다.

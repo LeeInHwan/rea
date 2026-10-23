@@ -142,6 +142,19 @@ async function getRoute(url, context, send) {
 }
 async function postRoute(req, url, context, send) {
   const { stateDir, jobs } = context;
+  if (context.closing) return send(503, { error: "UI 서버가 종료 중입니다." });
+  if (url.pathname === "/api/shutdown") {
+    if (jobs.busy)
+      return send(409, {
+        error: "실행 중인 작업의 완료·정리를 기다려 주세요.",
+      });
+    context.closing = true;
+    send(200, { status: "closing" });
+    setImmediate(() => {
+      void context.close().catch((error) => console.error(error));
+    });
+    return;
+  }
   if (url.pathname === "/api/jobs") {
     const input = requestSchema.parse(await body(req));
     if (
@@ -231,6 +244,8 @@ export async function startServer({
     projects,
     jobs,
     engineVersion,
+    closing: false,
+    close: null,
   };
   const server = http.createServer(async (req, res) => {
     const send = (code, data, type = "application/json; charset=utf-8") => {
@@ -251,19 +266,31 @@ export async function startServer({
     }
   });
   server.requestTimeout = 15000;
-  await new Promise((resolveListen, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolveListen);
-  });
+  try {
+    await new Promise((resolveListen, reject) => {
+      server.once("error", reject);
+      server.listen(port, "127.0.0.1", resolveListen);
+    });
+  } catch (error) {
+    await jobs.close();
+    throw error;
+  }
   context.base = `http://127.0.0.1:${server.address().port}`;
+  let closing;
+  context.close = () =>
+    (closing ??= (async () => {
+      context.closing = true;
+      await jobs.close();
+      await new Promise((resolveClose, reject) =>
+        server.close((error) => (error ? reject(error) : resolveClose())),
+      );
+    })());
   return {
     server,
+    owner: jobs.owner,
     base: context.base,
     url: `${context.base}/session/${context.secret}`,
-    close: async () => {
-      await jobs.close();
-      await new Promise((resolveClose) => server.close(resolveClose));
-    },
+    close: context.close,
   };
 }
 if (
@@ -280,6 +307,8 @@ if (
     JSON.stringify({
       url: ui.url,
       pid: process.pid,
+      lifecycle: 1,
+      start_identity: ui.owner.start_identity,
       runtime: fileURLToPath(new URL("../../", import.meta.url)),
     }),
     { mode: 0o600 },

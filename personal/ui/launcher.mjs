@@ -25,6 +25,65 @@ async function existing() {
     return null;
   }
 }
+async function retirePriorServer() {
+  let prior;
+  try {
+    prior = JSON.parse(await readFile(connection, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  const url = new URL(prior.url);
+  if (
+    url.protocol !== "http:" ||
+    url.hostname !== "127.0.0.1" ||
+    !new RegExp("^/session/[a-f0-9]{64}$").test(url.pathname)
+  )
+    throw new Error("기존 UI 연결을 확인할 수 없습니다.");
+  let login;
+  try {
+    login = await fetch(prior.url, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch {
+    return;
+  } // Workspace ownership still proves owner exit before recovery.
+  if (login.status !== 303) return;
+  if (prior.lifecycle !== 1)
+    throw new Error(
+      "이전 UI가 실행 중입니다. 기존 작업의 완료와 서버 종료를 확인한 뒤 다시 여세요.",
+    );
+  const response = await fetch(url.origin + "/api/shutdown", {
+    method: "POST",
+    headers: {
+      Cookie: `rea_session=${url.pathname.slice(9)}`,
+      Origin: url.origin,
+      "Content-Type": "application/json",
+      "X-REA-Request": "1",
+    },
+    body: "{}",
+    signal: AbortSignal.timeout(5000),
+  });
+  if (response.status !== 200)
+    throw new Error("기존 REA 작업의 완료·정리를 기다린 뒤 다시 여세요.");
+  for (let i = 0; i < 80; i++) {
+    try {
+      const value = await fetch(prior.url, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(500),
+      });
+      if (value.status !== 303) return;
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    "기존 UI 서버의 종료가 지연되어 새 서버를 시작하지 않았습니다.",
+  );
+}
+
 async function ensureServer() {
   let url = await existing();
   if (url) return url;
@@ -46,6 +105,7 @@ async function ensureServer() {
   try {
     url = await existing();
     if (url) return url;
+    await retirePriorServer();
     const output = await open(join(state, "server.log"), "a", 0o600);
     const child = spawn(
       process.execPath,

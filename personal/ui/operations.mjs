@@ -13,24 +13,17 @@ import { withEngine } from "../workbench/engine.mjs";
 import { load, json } from "../workbench/store.mjs";
 import { fileDigest } from "../workbench/managed-restore.mjs";
 
+import { compareObservations } from "./execution-observations.mjs";
 const path = z.string().min(1).refine(isAbsolute, "절대 경로를 선택하세요.");
 const command = z.strictObject({
   executable: path,
   arguments: z.array(z.string()).max(100).default([]),
 });
 export function executionObservations(left, right) {
-  const a = left.normalized_result,
-    b = right.normalized_result;
-  const raw = (value) => value.frames.map((frame) => frame.data).join("");
   return {
-    original_output: raw(a),
-    candidate_output: raw(b),
-    output_equal: a.truncated || b.truncated ? null : raw(a) === raw(b),
-    original_exit: a.exit,
-    candidate_exit: b.exit,
-    exit_equal: JSON.stringify(a.exit) === JSON.stringify(b.exit),
+    ...compareObservations(left, right),
     scope:
-      "수집된 출력 바이트와 종료 결과만 비교. 프레임 시각·분할·정착 시간은 이 요약에서 제외하며 원본 Evidence와 전체 비교에 보존합니다.",
+      "수집된 터미널 출력과 종료 결과만 비교. 디코딩 손실·누락은 unknown이며 시각·분할·정착 정보는 원본 Evidence에 보존합니다.",
   };
 }
 export const requestSchema = z

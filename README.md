@@ -41,6 +41,8 @@ DMG·ASAR 추출과 Ghidra/JADX/JavaScript 정밀 분석도 제공합니다. APK
 
 [APK 서명·실행 검증](docs/personal-android-runtime.md) · [네이티브 소스 재구성](docs/personal-native-recovery.md)
 
+개인 UI **0.3.1**은 디코딩 손실을 통과 판정에서 제외하고, 작업 공간별 서버 소유권과 유휴 버전 교체를 검사합니다. Android 비교에는 부모·자식 경로도 포함합니다. 개인 계약 CI는 Linux/macOS, Windows 실행 CI는 별도로 검증합니다.
+
 ## 빠른 시작
 
 ### 1. 처음 내려받았다면

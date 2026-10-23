@@ -9,6 +9,7 @@ import { createBoundedProcessTextNormalizer } from "./ProcessNormalization.js";
 it("omits an expanding chunk whole and retains a later smaller normalized chunk", () => {
   let onData: ((data: string) => void) | undefined;
   const terminal = {
+    onExit: () => ({ dispose: () => undefined }),
     onData: (listener: (data: string) => void) => {
       onData = listener;
       return { dispose: () => undefined };
@@ -47,6 +48,7 @@ it("omits an expanding chunk whole and retains a later smaller normalized chunk"
   expect(renderedChunks).toEqual(["z"]);
   expect(journal).toEqual([["frames", 0]]);
   expect(captureRetention()).toEqual({
+    decoding_unknown: false,
     raw_terminal: {
       budget_bytes: 1_000,
       observed_bytes: 4,

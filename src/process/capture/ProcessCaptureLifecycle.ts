@@ -122,6 +122,7 @@ interface CaptureResultOptions {
   readonly before: ProcessFilesystemSnapshot;
   readonly after: ProcessFilesystemSnapshot;
   readonly truncationDetails: ProcessCaptureTruncationDetails;
+  readonly terminalDecodingUnknown?: boolean;
   readonly scenario: ProcessScenario;
   readonly rootPid: number;
   readonly samplingPartial: boolean;
@@ -359,6 +360,15 @@ export const buildCaptureResult = (
       ...(hasSensitiveScriptedInput ? [sensitiveInputUnknown] : []),
     ],
     residual_unknowns: [
+      ...(options.terminalDecodingUnknown
+        ? [
+            {
+              scope: "terminal" as const,
+              reason:
+                "PTY output contained invalid or incomplete UTF-8; decoded text cannot establish byte equivalence.",
+            },
+          ]
+        : []),
       {
         scope: "process",
         reason:
@@ -1304,6 +1314,7 @@ export const cleanupReportFailure = (
 
 export const captureTerminalFrames = (options: {
   readonly terminal: IPty;
+  readonly byteEncoding?: BufferEncoding;
   readonly scenario: ProcessScenario;
   readonly frames: TerminalFrame[];
   readonly started: number;
@@ -1320,7 +1331,13 @@ export const captureTerminalFrames = (options: {
   let observedBytes = 0;
   let observedFrames = 0;
   let normalizedOmittedFrames = 0;
-  options.terminal.onData((data) => {
+  let decodingUnknown = false;
+  const displayDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
+  const validityDecoder = new TextDecoder("utf-8", {
+    fatal: true,
+    ignoreBOM: true,
+  });
+  const retainText = (data: string) => {
     options.onOutput();
     const bytes = Buffer.byteLength(data);
     observedBytes += bytes;
@@ -1349,8 +1366,34 @@ export const captureTerminalFrames = (options: {
     });
     options.renderer.write(data, atMs);
     options.recordEvent("frames", sequence);
+  };
+  options.terminal.onData((chunk) => {
+    const value: unknown = chunk;
+    const bytes = Buffer.isBuffer(value)
+      ? value
+      : Buffer.from(chunk, options.byteEncoding ?? "utf8");
+    if (!decodingUnknown) {
+      try {
+        validityDecoder.decode(bytes, { stream: true });
+      } catch {
+        decodingUnknown = true;
+      }
+    }
+    retainText(displayDecoder.decode(bytes, { stream: true }));
+  });
+  options.terminal.onExit(() => {
+    if (!decodingUnknown) {
+      try {
+        validityDecoder.decode();
+      } catch {
+        decodingUnknown = true;
+      }
+    }
+    const tail = displayDecoder.decode();
+    if (tail) retainText(tail);
   });
   return () => ({
+    decoding_unknown: decodingUnknown,
     raw_terminal: {
       budget_bytes: options.scenario.limits.output_bytes,
       observed_bytes: observedBytes,
@@ -1367,6 +1410,7 @@ export const captureTerminalFrames = (options: {
 };
 
 export interface TerminalCaptureRetention {
+  readonly decoding_unknown: boolean;
   readonly raw_terminal: TerminalRetention;
   readonly normalized_terminal: NormalizedTerminalRetention;
 }
