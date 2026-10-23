@@ -87,3 +87,7 @@ node personal/ui/android-proof.mjs \
 [zipalign](https://developer.android.com/tools/zipalign),
 [ADB](https://developer.android.com/tools/adb),
 [Emulator 명령줄](https://developer.android.com/studio/run/emulator-commandline).
+
+설치 완료나 패키지 정리가 미확정이면 `cleanup-unresolved`로 기록하고 AVD의 `verification.lock`을 보존합니다. 다음 작업은 이 잠금 때문에 거부됩니다. receipt의 serial·package·expected_sha256으로 실제 설치 상태와 정리를 확인한 뒤, 다른 작업이 실행 중이지 않은 전용 AVD에서 해당 잠금만 수동 복구해야 합니다. PID나 명령의 종료만으로 원격 설치 완료를 추정하지 않습니다.
+
+화면의 `focused` 값도 비교합니다. 앞선 BACK/TAB 키 입력 때문에 기기의 touch mode가 달라지면 같은 화면에서 포커스 차이가 관찰될 수 있으며 이를 자동으로 무시하지 않습니다. ApiDemos proof는 양쪽의 첫 시나리오에서 같은 비활성 헤더 위치를 탭해 입력 모드를 명시적으로 맞춥니다. 이 대조 사례는 아무 입력도 하지 않은 초기 실행의 동등성 증명이 아닙니다.

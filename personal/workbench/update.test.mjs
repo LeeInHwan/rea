@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm, mkdir, readlink } from "node:fs/promises";
+import {
+  mkdtemp,
+  writeFile,
+  rm,
+  mkdir,
+  readlink,
+  symlink,
+  unlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git, integrateRelease } from "./update.mjs";
@@ -68,6 +76,34 @@ test("real Git updater: no-op, dirty refusal, qualification failure, concurrent 
     );
     assert.equal(git(repo, "rev-parse", "HEAD"), base);
     await rm(join(repo, "dirty"));
+    const selectedRuntime = join(root, "user-selected-runtime");
+    await mkdir(selectedRuntime);
+    await assert.rejects(
+      integrateRelease({
+        repo,
+        target,
+        runtime,
+        qualify: async () => {
+          await symlink(selectedRuntime, runtime);
+        },
+      }),
+      /Runtime changed during qualification/,
+    );
+    assert.equal(git(repo, "rev-parse", "HEAD"), base);
+    assert.equal(await readlink(runtime), selectedRuntime);
+    await unlink(runtime);
+    await writeFile(runtime, "user-owned ordinary file");
+    await assert.rejects(
+      integrateRelease({
+        repo,
+        target,
+        runtime,
+        qualify: async () => assert.fail("must fail before qualification"),
+      }),
+      /not a symlink/,
+    );
+    assert.equal(git(repo, "rev-parse", "HEAD"), base);
+    await unlink(runtime);
     const passed = await integrateRelease({
       repo,
       target,

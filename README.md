@@ -41,7 +41,7 @@ DMG·ASAR 추출과 Ghidra/JADX/JavaScript 정밀 분석도 제공합니다. APK
 
 [APK 서명·실행 검증](docs/personal-android-runtime.md) · [네이티브 소스 재구성](docs/personal-native-recovery.md)
 
-개인 UI **0.3.1**은 디코딩 손실을 통과 판정에서 제외하고, 작업 공간별 서버 소유권과 유휴 버전 교체를 검사합니다. Android 비교에는 부모·자식 경로도 포함합니다. 개인 계약 CI는 Linux/macOS, Windows 실행 CI는 별도로 검증합니다.
+개인 UI **0.3.2**는 원본 실행 바인딩, 종료 중 HTTP 요청, Android 미확정 정리와 업데이트 중 런타임 변경을 차단합니다. 복원 MSBuild 경로의 목록·이스케이프도 검사합니다. 0.3.1부터 디코딩 손실을 통과 판정에서 제외하고, 작업 공간별 서버 소유권과 유휴 버전 교체를 검사합니다. Android 비교에는 부모·자식 경로도 포함합니다. 개인 계약 CI는 Linux/macOS, Windows 실행 CI는 별도로 검증합니다. [10회 적대적 검수와 수정 범위](docs/personal-review-20261023.md)를 확인할 수 있습니다.
 
 ## 빠른 시작
 

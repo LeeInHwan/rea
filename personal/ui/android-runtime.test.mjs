@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, isAbsolute } from "node:path";
 import {
   parseApkIdentity,
   normalizeAndroidHierarchy,
   validateAndroidScenarios,
   signAndVerifyApk,
+  finishAndroidDeviceLease,
 } from "./android-runtime.mjs";
 
 test("APK identity preserves package/version/activity and rejects shell-bearing identities", () => {
@@ -96,7 +97,11 @@ test("prerequisite failure and cancellation retain a failed/cancelled receipt wi
     await mkdir(failed);
     await mkdir(cancelled);
     await assert.rejects(
-      signAndVerifyApk({ androidSdk: join(dir, "missing") }, failed),
+      signAndVerifyApk(
+        { androidSdk: join(dir, "missing") },
+        relative(process.cwd(), failed),
+      ),
+      (error) => isAbsolute(error.receipt_path),
     );
     const receipt = JSON.parse(
       await readFile(join(failed, "android-runtime", "receipt.json")),
@@ -120,5 +125,40 @@ test("prerequisite failure and cancellation retain a failed/cancelled receipt wi
     );
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("unresolved Android package cleanup retains its exact device lease and blocks reuse", async () => {
+  const root = await mkdtemp(join(tmpdir(), "rea-device-lease-"));
+  const lease = { path: join(root, "verification.lock"), token: "owned-token" };
+  try {
+    await writeFile(
+      lease.path,
+      JSON.stringify({ token: lease.token, receipt_path: "receipt.json" }),
+    );
+    await assert.rejects(
+      finishAndroidDeviceLease(lease, {
+        cleanup: [
+          { label: "original", status: "complete" },
+          { label: "candidate", status: "unresolved" },
+        ],
+      }),
+      /retaining device lease/,
+    );
+    await assert.rejects(
+      writeFile(lease.path, "next job", { flag: "wx" }),
+      /EEXIST/,
+    );
+    assert.equal(JSON.parse(await readFile(lease.path)).token, lease.token);
+    await assert.rejects(
+      finishAndroidDeviceLease({ ...lease, token: "foreign" }, { cleanup: [] }),
+      /identity changed/,
+    );
+    await finishAndroidDeviceLease(lease, {
+      cleanup: [{ status: "complete" }],
+    });
+    await assert.rejects(readFile(lease.path), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

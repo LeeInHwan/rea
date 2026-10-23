@@ -157,6 +157,8 @@ async function postRoute(req, url, context, send) {
   }
   if (url.pathname === "/api/jobs") {
     const input = requestSchema.parse(await body(req));
+    if (context.closing)
+      return send(503, { error: "UI 서버가 종료 중입니다." });
     if (
       ["verify", "pipeline"].includes(input.action) &&
       !input.executeAcknowledged
@@ -170,6 +172,8 @@ async function postRoute(req, url, context, send) {
   }
   if (url.pathname === "/api/cancel") {
     const { id } = await body(req);
+    if (context.closing)
+      return send(503, { error: "UI 서버가 종료 중입니다." });
     if (jobs.active !== id)
       return send(409, { error: "실행 중인 해당 작업이 없습니다." });
     jobs.cancel(id);
@@ -177,6 +181,8 @@ async function postRoute(req, url, context, send) {
   }
   if (url.pathname === "/api/settings") {
     const value = await body(req);
+    if (context.closing)
+      return send(503, { error: "UI 서버가 종료 중입니다." });
     if (
       !value ||
       Object.keys(value).some(
@@ -280,10 +286,19 @@ export async function startServer({
   context.close = () =>
     (closing ??= (async () => {
       context.closing = true;
+      const outcomes = await Promise.allSettled([
+        jobs.drain(),
+        new Promise((resolveClose, reject) =>
+          server.close((error) => (error ? reject(error) : resolveClose())),
+        ),
+      ]);
+      const failures = outcomes.filter((value) => value.status === "rejected");
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((value) => value.reason),
+          "UI 종료·정리를 완료하지 못해 소유권을 보존합니다.",
+        );
       await jobs.close();
-      await new Promise((resolveClose, reject) =>
-        server.close((error) => (error ? reject(error) : resolveClose())),
-      );
     })());
   return {
     server,

@@ -29,6 +29,13 @@ test("model output cannot escape source directory or forge coverage", () => {
       ["0x1"],
     ),
   );
+  for (const implementation of ["", "   "])
+    assert.throws(() =>
+      validateSources(
+        { ...source, functions: [{ address: "0x1", implementation }] },
+        ["0x1"],
+      ),
+    );
   assert.deepEqual(
     validateSources({ ...source, functions: [] }, ["0x1"]).missing,
     ["0x1"],

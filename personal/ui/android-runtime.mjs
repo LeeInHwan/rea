@@ -132,8 +132,19 @@ export function validateAndroidScenarios(value) {
   });
 }
 
+export async function finishAndroidDeviceLease(lease, receipt) {
+  const current = JSON.parse(await readFile(lease.path, "utf8"));
+  if (current.token !== lease.token)
+    throw new Error("Android device lease identity changed");
+  if (receipt.cleanup.some((entry) => entry.status === "unresolved"))
+    throw new Error(
+      "Android package cleanup unresolved; retaining device lease for manual recovery",
+    );
+  await unlink(lease.path);
+}
+
 export async function signAndVerifyApk(input, directory, signal) {
-  const output = join(directory, "android-runtime");
+  const output = join(await realpath(directory), "android-runtime");
   await mkdir(output, { mode: 0o700 });
   const receiptPath = join(output, "receipt.json");
   const receipt = {
@@ -814,13 +825,18 @@ export async function signAndVerifyApk(input, directory, signal) {
       }
     }
     if (deviceLease) {
-      const current = JSON.parse(await readFile(deviceLease.path, "utf8"));
-      if (current.token !== deviceLease.token) {
+      try {
+        await finishAndroidDeviceLease(deviceLease, receipt);
+      } catch (error) {
         receipt.status = "cleanup-unresolved";
+        receipt.error = [receipt.error, error.message]
+          .filter(Boolean)
+          .join("; ");
         await save();
-        throw new Error("Android device lease identity changed");
+        const failure = new Error(receipt.error, { cause: error });
+        failure.receipt_path = receiptPath;
+        throw failure;
       }
-      await unlink(deviceLease.path);
     }
     await save();
   }

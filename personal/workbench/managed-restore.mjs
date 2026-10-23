@@ -152,6 +152,21 @@ export function inspectRecoveredProject(xml) {
   ]);
   const unsafePath =
     /\$\(|@\(|%\(|(?:^|[\\/])\.\.(?:[\\/]|$)|^[\\/]|^[A-Za-z]:/;
+  // MSBuild expands escaped characters and semicolon item lists before resolving paths.
+  const unsafeValue = (value) =>
+    value
+      .replace(/%([0-9a-f]{2})/gi, (_, hex) =>
+        String.fromCharCode(parseInt(hex, 16)),
+      )
+      .split(";")
+      .some((part) => {
+        const item = part.trim();
+        return (
+          unsafePath.test(item) ||
+          /^[A-Za-z][A-Za-z0-9+.-]*:/.test(item) ||
+          Array.from(item).some((char) => char.charCodeAt(0) < 32)
+        );
+      });
   for (const element of Array.from(doc.getElementsByTagName("*"))) {
     if (!allowed.has(element.tagName))
       throw new Error(
@@ -161,7 +176,7 @@ export function inspectRecoveredProject(xml) {
       if (element.tagName === "Project" && attribute.name === "Sdk") continue;
       if (
         !["Include", "Remove", "Update"].includes(attribute.name) ||
-        unsafePath.test(attribute.value)
+        unsafeValue(attribute.value)
       )
         throw new Error(
           "Recovered project contains an external or evaluated item path",
@@ -169,7 +184,7 @@ export function inspectRecoveredProject(xml) {
     }
     if (
       !Array.from(element.childNodes).some((node) => node.nodeType === 1) &&
-      unsafePath.test(element.textContent.trim())
+      unsafeValue(element.textContent)
     )
       throw new Error(
         "Recovered project contains an external or evaluated property value",

@@ -15,6 +15,12 @@ test("recovered project cannot delegate to original assemblies, external build t
     '<ItemGroup><PackageReference Include="Original" Version="1.0"/></ItemGroup>',
     '<ItemGroup><Compile Include="../original.cs"/></ItemGroup>',
     '<ItemGroup><Compile Include="$(Original)/code.cs"/></ItemGroup>',
+    '<ItemGroup><Compile Include="safe.cs;/tmp/foreign.cs"/></ItemGroup>',
+    '<ItemGroup><Compile Include="safe.cs;C:/private/foreign.cs"/></ItemGroup>',
+    '<ItemGroup><Compile Include="%2e%2e%2fforeign.cs"/></ItemGroup>',
+    '<ItemGroup><Compile Include="safe.cs;%2fforeign.cs"/></ItemGroup>',
+    '<ItemGroup><EmbeddedResource Include="safe;%24%28HOME%29/foreign"/></ItemGroup>',
+    "<PropertyGroup><ApplicationIcon>safe.ico; /foreign.ico</ApplicationIcon></PropertyGroup>",
   ])
     assert.throws(() => inspectRecoveredProject(project(extra)));
   assert.throws(() => inspectRecoveredProject(project("", "External.Sdk")));

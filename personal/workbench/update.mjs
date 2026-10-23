@@ -39,20 +39,48 @@ function assertCleanMain(repo, expected) {
   if (expected && git(repo, "rev-parse", "HEAD") !== expected)
     throw new Error("Update deferred: main changed during qualification");
 }
-export async function activateRuntime(pointer, checkout) {
-  await mkdir(dirname(pointer), { recursive: true });
-  let previous = null;
+
+async function runtimePointer(pointer) {
   try {
-    if (!(await lstat(pointer)).isSymbolicLink())
+    const info = await lstat(pointer);
+    if (!info.isSymbolicLink())
       throw new Error("Runtime pointer exists and is not a symlink");
-    previous = await readlink(pointer);
+    return {
+      target: await readlink(pointer),
+      device: info.dev,
+      inode: info.ino,
+      modified: info.mtimeMs,
+    };
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    if (error.code === "ENOENT") return null;
+    throw error;
   }
+}
+async function assertRuntimePointer(pointer, expected) {
+  if (
+    JSON.stringify(await runtimePointer(pointer)) !== JSON.stringify(expected)
+  )
+    throw new Error(
+      "Runtime changed during qualification; automatic overwrite refused",
+    );
+}
+export async function activateRuntime(pointer, checkout, expected) {
+  await mkdir(dirname(pointer), { recursive: true });
+  const previous = await runtimePointer(pointer);
+  if (expected !== undefined) await assertRuntimePointer(pointer, expected);
   const temporary = `${pointer}.${randomUUID()}`;
   await symlink(checkout, temporary, "dir");
-  await rename(temporary, pointer);
-  return previous;
+  try {
+    await assertRuntimePointer(
+      pointer,
+      expected === undefined ? previous : expected,
+    );
+    await rename(temporary, pointer);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+  return previous?.target ?? null;
 }
 export async function integrateRelease({
   repo,
@@ -89,6 +117,7 @@ export async function integrateRelease({
       `${JSON.stringify(receipt, null, 2)}\n`,
     );
   try {
+    receipt.runtime_before = await runtimePointer(runtime);
     await record();
     git(repo, "worktree", "add", "--detach", checkout, base);
     git(
@@ -109,6 +138,7 @@ export async function integrateRelease({
     if (git(checkout, "rev-parse", "HEAD") !== receipt.candidate)
       throw new Error("Candidate commit changed during qualification");
     assertCleanMain(repo, base);
+    await assertRuntimePointer(runtime, receipt.runtime_before);
     if (
       publish &&
       git(repo, "ls-remote", "origin", "refs/heads/main").split(/\s+/)[0] !==
@@ -127,7 +157,11 @@ export async function integrateRelease({
     );
     receipt.status = "source-promoted";
     await record();
-    receipt.previous_runtime = await activateRuntime(runtime, checkout);
+    receipt.previous_runtime = await activateRuntime(
+      runtime,
+      checkout,
+      receipt.runtime_before,
+    );
     receipt.status = "activated";
     await record();
     if (publish) {
@@ -194,6 +228,7 @@ export async function qualifyRuntime(checkout, run) {
         "personal/ui/adversarial.test.mjs",
         "personal/ui/workspace-owner.test.mjs",
         "personal/ui/byte-capture.test.mjs",
+        "personal/ui/review10.test.mjs",
       ],
     ],
     ["npm", ["run", "test:focused", "--", ...tests]],

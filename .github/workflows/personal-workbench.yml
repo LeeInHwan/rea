@@ -28,6 +28,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:cached
-      - run: node --test personal/workbench/workbench.test.mjs personal/workbench/update.test.mjs personal/workbench/managed-restore.test.mjs personal/ui/server.test.mjs personal/ui/android-runtime.test.mjs personal/ui/native-recovery.test.mjs personal/ui/adversarial.test.mjs personal/ui/workspace-owner.test.mjs personal/ui/byte-capture.test.mjs
+      - run: node --test personal/workbench/workbench.test.mjs personal/workbench/update.test.mjs personal/workbench/managed-restore.test.mjs personal/ui/server.test.mjs personal/ui/android-runtime.test.mjs personal/ui/native-recovery.test.mjs personal/ui/adversarial.test.mjs personal/ui/workspace-owner.test.mjs personal/ui/byte-capture.test.mjs personal/ui/review10.test.mjs
       - run: npm run test:local -- src/process/capture/ProcessCaptureUtf8.test.ts src/process/capture/ProcessCaptureTerminalRetention.test.ts src/process/capture/ProcessCaptureObservation.test.ts src/process/capture/ProcessCaptureLifecycle.test.ts src/process/capture/ProcessHarness.test.ts
       - run: npm run test:focused -- tests/acceptance/emptyTargetPathCli.test.ts tests/boundary/mcp/artifactMcp.test.ts tests/boundary/providers/native/artifactProvider.extractionFormat.test.ts tests/boundary/providers/native/nativeDmgArtifactReader.test.ts tests/boundary/cli/evidenceBundleCommands.test.ts tests/boundary/filesystem/evidenceBundleFiles.test.ts

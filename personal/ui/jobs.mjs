@@ -134,7 +134,7 @@ export async function createJobs(stateDir, runner) {
       jobs.get(id).status = "cancelling";
       active.controller.abort(new Error("사용자가 작업을 취소했습니다."));
     },
-    async close() {
+    async drain() {
       closing = true;
       try {
         await starting;
@@ -143,6 +143,9 @@ export async function createJobs(stateDir, runner) {
       }
       active?.controller.abort();
       await active?.task;
+    },
+    async close() {
+      await this.drain();
       await workspace.release();
     },
   };

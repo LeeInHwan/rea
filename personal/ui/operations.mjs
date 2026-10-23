@@ -6,7 +6,7 @@ import {
   selectedArtifact,
 } from "./artifact-workflows.mjs";
 import { mkdir, writeFile, realpath } from "node:fs/promises";
-import { join, isAbsolute, relative } from "node:path";
+import { join, isAbsolute, relative, basename, sep } from "node:path";
 import { z } from "zod";
 import { execute } from "../workbench/service.mjs";
 import { withEngine } from "../workbench/engine.mjs";
@@ -25,6 +25,39 @@ export function executionObservations(left, right) {
     scope:
       "수집된 터미널 출력과 종료 결과만 비교. 디코딩 손실·누락은 unknown이며 시각·분할·정착 정보는 원본 Evidence에 보존합니다.",
   };
+}
+
+export async function bindOriginalCommand(input, state, inventory) {
+  const executable = await realpath(input.original.executable);
+  const component = async (path) => {
+    const actual = await realpath(path);
+    const rel = relative(state.target.path, actual);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))
+      return null;
+    const sha256 = await fileDigest(actual);
+    return inventory?.normalized_result.nodes.some(
+      (node) => node.sha256 === sha256,
+    )
+      ? { path: actual, sha256 }
+      : null;
+  };
+  const direct = await component(executable);
+  if (direct) return { mode: "direct-executable", ...direct };
+  const first = input.original.arguments[0];
+  if (
+    input.dotnet &&
+    /^dotnet(?:[.]exe)?$/i.test(basename(executable)) &&
+    executable === (await realpath(input.dotnet)) &&
+    isAbsolute(first ?? "") &&
+    first.toLowerCase().endsWith(".dll")
+  ) {
+    const assembly = await component(first);
+    if (assembly)
+      return { mode: "dotnet-assembly", host: executable, ...assembly };
+  }
+  throw new Error(
+    "원본 실행 파일 또는 지정한 dotnet의 첫 DLL 인자가 등록한 원본과 일치해야 합니다. 사용하지 않는 인자는 원본 정체성을 증명하지 못합니다.",
+  );
 }
 export const requestSchema = z
   .strictObject({
@@ -261,27 +294,11 @@ export async function runOperation(input, directory, progress, signal) {
     const inventory = bundle.records.find(
       (x) => x.evidence_id === state.target.inventory_evidence_id,
     );
-    const originalPaths = [
-      input.original.executable,
-      ...input.original.arguments.filter(isAbsolute),
-    ];
-    let bound = false;
-    for (const value of originalPaths) {
-      try {
-        const actual = await realpath(value);
-        const rel = relative(state.target.path, actual);
-        if (rel.startsWith("..") || isAbsolute(rel)) continue;
-        const hash = await fileDigest(actual);
-        if (inventory?.normalized_result.nodes.some((n) => n.sha256 === hash))
-          bound = true;
-      } catch {
-        /* Non-file arguments cannot establish original identity. */
-      }
-    }
-    if (!bound)
-      throw new Error(
-        "원본 실행 파일 또는 절대 경로 인자가 등록한 원본의 구성 파일과 일치해야 합니다.",
-      );
+    result.original_binding = await bindOriginalCommand(
+      input,
+      state,
+      inventory,
+    );
     const evidenceDir = join(directory, "captures");
     await mkdir(evidenceDir);
     await stage("verification", async () => {

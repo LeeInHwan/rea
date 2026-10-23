@@ -20,7 +20,15 @@ export const sourceSchema = z.strictObject({
     .min(1)
     .max(32),
   functions: z.array(
-    z.strictObject({ address: z.string(), implementation: z.string() }),
+    z.strictObject({
+      address: z.string(),
+      implementation: z
+        .string()
+        .refine(
+          (value) => value.trim().length > 0,
+          "Function implementation mapping must not be blank",
+        ),
+    }),
   ),
   unknowns: z.array(z.string()),
   derivations: z.array(z.string()),

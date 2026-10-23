@@ -48,7 +48,8 @@ try {
       avdName,
       executeAcknowledged: true,
       scenarios: [
-        { name: "initial-launch", waitMs: 3000 },
+        // Both fresh installs start in the same touch mode, including after BACK key scenarios.
+        { name: "launch-header-tap", taps: [{ x: 500, y: 200 }], waitMs: 3000 },
         {
           name: "accessibility-menu",
           taps: [{ x: 170, y: 350 }],
