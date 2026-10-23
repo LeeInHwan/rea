@@ -14,14 +14,14 @@ import type { BinaryTarget } from "../../../../src/domain/binaryTargetTypes.js";
 describe("artifact extraction format support", () => {
   it("refuses unsupported formats before inventory or output", async () => {
     const root = await createTestTempDirectory("rea-extract-format-");
-    const image = join(root, "Image.dmg");
+    const image = join(root, "Image.pkg");
     await writeFile(image, "not mounted");
-    const alias = join(root, "Alias.dmg");
+    const alias = join(root, "Alias.pkg");
     await symlink(image, alias);
     const output = join(root, "output");
     const extract = (signal?: AbortSignal) =>
       new ArtifactProvider(process.env)
-        .createClient(archiveTarget(alias, "dmg"))
+        .createClient(archiveTarget(alias, "pkg"))
         .execute(
           "extract_artifact",
           artifactExtractionExecutionSchema.parse({ output_root: output }),
@@ -33,7 +33,7 @@ describe("artifact extraction format support", () => {
         _tag: "AnalysisUnsupportedTargetError",
         operation: "extract_artifact",
         path: alias,
-        reason: "Artifact format has no extraction reader: dmg",
+        reason: "Artifact format has no extraction reader: pkg",
       },
     });
     const controller = new AbortController();

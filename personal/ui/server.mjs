@@ -166,13 +166,16 @@ async function postRoute(req, url, context, send) {
     const value = await body(req);
     if (
       !value ||
-      Object.keys(value).some((key) => !["ilspy", "dotnet"].includes(key))
+      Object.keys(value).some(
+        (key) => !["ilspy", "dotnet", "java", "apktool"].includes(key),
+      )
     )
       throw new Error("지원하지 않는 설정입니다.");
-    for (const key of ["ilspy", "dotnet"])
+    for (const key of ["ilspy", "dotnet", "java", "apktool"])
       if (
-        typeof value[key] !== "string" ||
-        (value[key] && !isAbsolute(value[key]))
+        value[key] !== undefined &&
+        (typeof value[key] !== "string" ||
+          (value[key] && !isAbsolute(value[key])))
       )
         throw new Error("도구의 절대 경로를 지정하세요.");
     await writeFile(

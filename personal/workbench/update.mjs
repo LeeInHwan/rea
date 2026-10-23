@@ -168,6 +168,8 @@ export async function qualifyRuntime(checkout, run) {
   const tests = [
     "tests/acceptance/emptyTargetPathCli.test.ts",
     "tests/boundary/mcp/artifactMcp.test.ts",
+    "tests/boundary/providers/native/artifactProvider.extractionFormat.test.ts",
+    "tests/boundary/providers/native/nativeDmgArtifactReader.test.ts",
     "tests/boundary/cli/evidenceBundleCommands.test.ts",
     "tests/boundary/filesystem/evidenceBundleFiles.test.ts",
   ];

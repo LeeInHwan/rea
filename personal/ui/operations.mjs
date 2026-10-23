@@ -1,3 +1,4 @@
+import { analyzeArtifact, rebuildApk } from "./artifact-workflows.mjs";
 import { mkdir, writeFile, realpath } from "node:fs/promises";
 import { join, isAbsolute, relative } from "node:path";
 import { z } from "zod";
@@ -30,6 +31,9 @@ export const requestSchema = z
   .strictObject({
     action: z.enum([
       "analyze",
+      "deep",
+      "extract",
+      "apk",
       "resume",
       "restore",
       "verify",
@@ -39,6 +43,9 @@ export const requestSchema = z
     target: path.optional(),
     project: path,
     assembly: path.optional(),
+    route: z.enum(["native", "android", "javascript"]).optional(),
+    java: path.optional(),
+    apktool: path.optional(),
     output: path.optional(),
     ilspy: path.optional(),
     dotnet: path.optional(),
@@ -52,6 +59,9 @@ export const requestSchema = z
   .superRefine((input, ctx) => {
     const required = {
       analyze: ["target"],
+      deep: ["route"],
+      extract: [],
+      apk: ["output", "java", "apktool"],
       resume: [],
       export: ["destination"],
       restore: ["assembly", "output", "ilspy", "dotnet"],
@@ -107,6 +117,12 @@ export async function runOperation(input, directory, progress, signal) {
     await stage("resume", () =>
       execute("project_resume", { project: input.project }, { signal }),
     );
+  }
+  if (["deep", "extract"].includes(input.action)) {
+    await stage(input.action, () => analyzeArtifact(input, directory, signal));
+  }
+  if (input.action === "apk") {
+    await stage("apk", () => rebuildApk(input, directory, signal));
   }
   if (["restore", "pipeline"].includes(input.action)) {
     const recovery = await stage("recovery", () =>

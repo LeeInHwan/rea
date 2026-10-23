@@ -50,7 +50,7 @@
         </div>
         <div id="step-recovery" class="step">
           <span>02</span>
-          <div><b>복원 · 빌드</b><small>단일 .NET 앱 → C# 프로젝트</small></div>
+          <div><b>복원 · 빌드</b><small>패키지 추출 · APK · .NET</small></div>
         </div>
         <div id="step-verification" class="step">
           <span>03</span>
@@ -108,14 +108,70 @@
           <section class="card">
             <div class="card-heading">
               <div>
+                <span class="section-number">02 / ARTIFACT LAB</span>
+                <h2>패키지 안쪽까지 분석</h2>
+              </div>
+              <span class="tag">DMG · APK · NATIVE</span>
+            </div>
+            <p class="hint">
+              먼저 원본을 등록하세요. 패키지는 파일을 추출하고, 설치 폴더는 내부
+              실행 파일을 골라 정밀 분석합니다. 추출 결과는 새 프로젝트로 등록해
+              이어서 분석할 수 있습니다.
+            </p>
+            <label for="route">정밀 분석 방식</label
+            ><select id="route">
+              <option value="native">
+                네이티브 · Ghidra 함수/바이너리 개요
+              </option>
+              <option value="android">APK · JADX 패키지/클래스 분석</option>
+              <option value="javascript">
+                Electron / JavaScript · 모듈 그래프
+              </option>
+            </select>
+            <label for="member"
+              >내부 분석 파일 <span>비우면 등록한 원본</span></label
+            >
+            <div class="path-row">
+              <input
+                id="member"
+                placeholder="/Applications/App.app/Contents/MacOS/App"
+                spellcheck="false"
+              /><button data-browse="member">찾기</button>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="deep">정밀 분석</button
+              ><button id="extract">패키지 파일 추출</button>
+            </div>
+            <p class="micro">
+              추출은 배포 파일을 꺼내는 작업입니다. 네이티브 기계어에서 원본
+              C/C++ 프로젝트 전체를 자동 복원하지는 않습니다.
+            </p>
+            <hr />
+            <h3>APK 복원 · 재빌드</h3>
+            <p class="hint">
+              등록한 APK의 Smali·리소스를 복원하고 새 APK를 만듭니다. 아래 복원
+              결과 폴더를 사용합니다. 도구 설정에서 Java와 Apktool 3.0.3 JAR을
+              지정하세요.
+            </p>
+            <button class="secondary full" id="apk">
+              APK 복원 후 재빌드 ↗
+            </button>
+            <p class="micro">
+              결과: 서명되지 않은 APK. Java/Kotlin 원본 복원·서명·기기 실행
+              검증은 포함하지 않습니다.
+            </p>
+          </section>
+          <section class="card">
+            <div class="card-heading">
+              <div>
                 <span class="section-number">02 / RECONSTRUCT</span>
                 <h2>소스 복원 · 빌드</h2>
               </div>
               <span class="tag">.NET 전용</span>
             </div>
             <p class="hint">
-              등록한 원본 안의 실행 DLL을 C# 프로젝트로 복원합니다. 네이티브·APK
-              전체 복원은 아직 지원하지 않습니다.
+              등록한 원본 안의 실행 DLL을 C# 프로젝트로 복원합니다. APK는 위의
+              별도 경로에서 복원·재빌드할 수 있습니다.
             </p>
             <label for="assembly">.NET 실행 어셈블리</label>
             <div class="path-row">
@@ -356,6 +412,18 @@
       <label for="dotnet">dotnet 실행 파일</label>
       <div class="path-row">
         <input id="dotnet" spellcheck="false" /><button data-browse="dotnet">
+          찾기
+        </button>
+      </div>
+      <label for="java">Java 실행 파일 · APK용</label>
+      <div class="path-row">
+        <input id="java" spellcheck="false" /><button data-browse="java">
+          찾기
+        </button>
+      </div>
+      <label for="apktool">Apktool 3.0.3 JAR · 공식 SHA-256 검사</label>
+      <div class="path-row">
+        <input id="apktool" spellcheck="false" /><button data-browse="apktool">
           찾기
         </button>
       </div>

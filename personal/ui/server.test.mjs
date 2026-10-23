@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer } from "./server.mjs";
@@ -55,7 +55,7 @@ async function session(options, action) {
   }
 }
 async function finish(request, id) {
-  for (let count = 0; count < 200; count++) {
+  for (let count = 0; count < 600; count++) {
     const job = await (await request(`/api/jobs/${id}`)).json();
     if (!["running", "cancelling"].includes(job.status)) return job;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -176,3 +176,146 @@ test("simultaneous submissions admit exactly one job; settings persist", async (
     );
   });
 });
+
+test("artifact actions validate prerequisites and preserve package versus execution boundaries", async () => {
+  const { requestSchema } = await import("./operations.mjs");
+  assert.equal(
+    requestSchema.safeParse({ action: "apk", project: "/p", output: "/o" })
+      .success,
+    false,
+  );
+  assert.equal(
+    requestSchema.safeParse({ action: "deep", project: "/p" }).success,
+    false,
+  );
+  assert.equal(
+    requestSchema.parse({ action: "extract", project: "/p" })
+      .executeAcknowledged,
+    false,
+  );
+  await session({}, async ({ root, request }) => {
+    const { createPackage } = await import("@electron/asar");
+    const source = join(root, "source");
+    await mkdir(source);
+    await writeFile(
+      join(source, "package.json"),
+      '{"name":"rea-owned-fixture","main":"index.js"}',
+    );
+    await writeFile(
+      join(source, "index.js"),
+      "module.exports = (a, b) => a + b;\n",
+    );
+    const target = join(root, "app.asar");
+    await createPackage(source, target);
+    const project = join(root, "project");
+    const submit = async (input) => {
+      const response = await request("/api/jobs", { project, ...input });
+      assert.equal(response.status, 202);
+      const job = await finish(request, (await response.json()).id);
+      assert.equal(job.status, "complete", job.error);
+      return job;
+    };
+    await submit({ action: "analyze", target });
+    const extracted = await submit({ action: "extract" });
+    const output = extracted.result.extract.normalized_result.output_root;
+    try {
+      const { readFile } = await import("node:fs/promises");
+      assert.equal(
+        await readFile(join(output, "index.js"), "utf8"),
+        "module.exports = (a, b) => a + b;\n",
+      );
+      assert.ok(extracted.result.extract.evidence_path);
+    } finally {
+      await rm(output, { recursive: true, force: true });
+    }
+    const inspected = await submit({ action: "deep", route: "javascript" });
+    assert.ok(inspected.result.deep.evidence_id);
+    assert.ok(inspected.result.deep.evidence_path);
+    const { selectedArtifact } = await import("./artifact-workflows.mjs");
+    await assert.rejects(
+      () => selectedArtifact(project, join(source, "index.js")),
+      /원본 내부/,
+    );
+    const folderProject = join(root, "folder-project");
+    const { execute } = await import("../workbench/service.mjs");
+    await execute("project_create", { project: folderProject, target: source });
+    assert.equal(
+      (await selectedArtifact(folderProject, join(source, "index.js"))).path,
+      await realpath(join(source, "index.js")),
+    );
+    await writeFile(join(source, "index.js"), "changed");
+    await assert.rejects(
+      () => selectedArtifact(folderProject, join(source, "index.js")),
+      /해시/,
+    );
+  });
+});
+
+test(
+  "macOS DMG extraction uses real read-only mounts and retains detach provenance",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    await session({}, async ({ root, request }) => {
+      const { owned } = await import("../workbench/managed-restore.mjs");
+      const { readFile } = await import("node:fs/promises");
+      const source = join(root, "source");
+      await mkdir(source);
+      await writeFile(join(source, "proof.txt"), "DMG proof\n");
+      const image = join(root, "proof.dmg");
+      const created = await owned(
+        "/usr/bin/hdiutil",
+        [
+          "create",
+          "-srcfolder",
+          source,
+          "-volname",
+          "REA-fixture",
+          "-format",
+          "UDZO",
+          image,
+        ],
+        root,
+        120000,
+      );
+      assert.equal(created.exitCode, 0);
+      const project = join(root, "project");
+      for (const input of [
+        { action: "analyze", target: image },
+        { action: "extract" },
+      ]) {
+        const response = await request("/api/jobs", { project, ...input });
+        assert.equal(response.status, 202);
+        const job = await finish(request, (await response.json()).id);
+        assert.equal(job.status, "complete", job.error);
+        if (input.action === "extract") {
+          const result = job.result.extract.normalized_result;
+          try {
+            const entry = result.artifacts.find((a) =>
+              a.relative_path.endsWith("proof.txt"),
+            );
+            assert.ok(entry);
+            assert.equal(
+              await readFile(
+                join(result.output_root, entry.relative_path),
+                "utf8",
+              ),
+              "DMG proof\n",
+            );
+            assert.ok(
+              result.provenance.some(
+                (p) =>
+                  p.arguments.includes("attach") &&
+                  p.arguments.includes("-readonly"),
+              ),
+            );
+            assert.ok(
+              result.provenance.some((p) => p.arguments.includes("detach")),
+            );
+          } finally {
+            await rm(result.output_root, { recursive: true, force: true });
+          }
+        }
+      }
+    });
+  },
+);

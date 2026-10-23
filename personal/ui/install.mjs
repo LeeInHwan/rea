@@ -12,27 +12,43 @@ const current = join(home, ".local/share/rea-personal/current");
 await lstat(join(current, "personal/ui/launcher.mjs"));
 const state = join(home, ".local/share/rea-personal/ui");
 await mkdir(state, { recursive: true, mode: 0o700 });
+const settingsPath = join(state, "settings.json");
+let priorSettings;
+let settings = {};
 try {
-  await lstat(join(state, "settings.json"));
+  priorSettings = await readFile(settingsPath, "utf8");
+  settings = JSON.parse(priorSettings);
 } catch (error) {
   if (error.code !== "ENOENT") throw error;
-  const settings = {};
-  for (const [key, file] of Object.entries({
-    dotnet: "dotnet-10.0.100/dotnet",
-    ilspy: "ilspy-11.1.0.9782/ilspycmd",
-  })) {
-    const path = join(home, ".local/share/rea-personal/tools", file);
-    try {
-      if ((await lstat(path)).isFile()) settings[key] = path;
-    } catch {
-      /* Caller can configure tools later. */
-    }
+}
+for (const [key, path] of Object.entries({
+  dotnet: join(home, ".local/share/rea-personal/tools/dotnet-10.0.100/dotnet"),
+  ilspy: join(
+    home,
+    ".local/share/rea-personal/tools/ilspy-11.1.0.9782/ilspycmd",
+  ),
+  apktool: join(
+    home,
+    ".local/share/rea-personal/tools/apktool-3.0.3/apktool.jar",
+  ),
+  java: join(
+    process.env.JAVA_HOME ||
+      "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+    "bin/java",
+  ),
+})) {
+  if (settings[key]) continue;
+  try {
+    if ((await lstat(path)).isFile()) settings[key] = path;
+  } catch {
+    /* Tool acquisition is separate; preserve caller choices. */
   }
-  await writeFile(
-    join(state, "settings.json"),
-    JSON.stringify(settings, null, 2),
-    { flag: "wx", mode: 0o600 },
-  );
+}
+const nextSettings = JSON.stringify(settings, null, 2);
+if (nextSettings !== priorSettings) {
+  if (priorSettings !== undefined)
+    await copyFile(settingsPath, `${settingsPath}.backup`);
+  await writeFile(settingsPath, nextSettings, { mode: 0o600 });
 }
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 const bin = join(home, ".local/bin");

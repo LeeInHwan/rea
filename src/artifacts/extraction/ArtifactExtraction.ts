@@ -3,6 +3,8 @@ import { lstat, realpath } from "node:fs/promises";
 
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
+import { NativeDmgArtifactReader } from "../NativeDmgArtifactReader.js";
+import type { ArtifactCommand } from "../../domain/artifactGraph.js";
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
 import {
   ArtifactPathRegistry,
@@ -132,6 +134,7 @@ const materializeArtifactInventoryInScope = async (
     if (neededNodes.has(node.artifact_id)) nodes.set(node.artifact_id, node);
   const inventory: ExtractionInventory = {
     manifest: snapshot.manifest,
+    provenance: snapshot.provenance,
     integrityContradictions: snapshot.integrity_contradictions.filter(
       ({ occurrence_id: id }) => selectedIds.has(id),
     ),
@@ -252,7 +255,13 @@ const materializeSelection = async ({
     extracted.sort((left, right) =>
       compareUnicodeCodePoints(left.relative_path, right.relative_path),
     );
-    completed = createExtractionResult(input, inventory, selected, extracted);
+    completed = createExtractionResult(
+      input,
+      inventory,
+      selected,
+      extracted,
+      reader.provenance(),
+    );
     await output.commit(signal);
     return completed;
   } catch (cause: unknown) {
@@ -361,6 +370,7 @@ const createExtractionResult = (
   inventory: ExtractionInventory,
   selected: readonly SelectedOccurrence[],
   extracted: readonly ExtractedOccurrence[],
+  provenance: readonly ArtifactCommand[],
 ): ArtifactExtractionResult => {
   const extractionSemantic = {
     source_manifest_id: inventory.manifest.manifest_id,
@@ -380,7 +390,7 @@ const createExtractionResult = (
     artifacts: extracted,
     containment_verified: true,
     cleanup: { attempted: false, verified: true, residual_paths: [] },
-    provenance: [],
+    provenance: [...inventory.provenance, ...provenance],
     integrity_contradictions: inventory.integrityContradictions,
     limitations: [
       "All regular files in the active artifact were materialized; nested archive contents remain represented by their containing file.",
@@ -394,6 +404,7 @@ const createExtractionResult = (
 };
 
 interface ExtractionInventory {
+  readonly provenance: readonly ArtifactCommand[];
   readonly manifest: ArtifactGraphManifest;
   readonly integrityContradictions: readonly IntegrityContradiction[];
 }
@@ -412,6 +423,7 @@ const requireExtractableFormat = async (
   if (
     !directory &&
     format !== "asar" &&
+    format !== "dmg" &&
     !isMachOFormat(format) &&
     !isZipPackageFormat(format)
   )
@@ -433,6 +445,8 @@ const createReader = async (
   const format = input.inputFormat;
   if (await requireExtractableFormat(path, input))
     return new DirectoryArtifactReader(path);
+  if (format === "dmg")
+    return new NativeDmgArtifactReader(path, input.environment);
   if (format === "asar") return new AsarArtifactReader(path);
   if (isZipPackageFormat(format)) return new ZipArtifactReader(path, format);
   return new MachOSliceArtifactReader(path, input.environment);

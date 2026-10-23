@@ -1,6 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const names = {
   analysis: "원본 분석",
+  deep: "정밀 분석",
+  extract: "패키지 추출",
+  apk: "APK 복원 · 재빌드",
   resume: "원본 재검사",
   recovery: "소스 복원 · 빌드",
   verification: "실행 비교",
@@ -35,6 +38,10 @@ const formIds = [
   "timeout",
   "ilspy",
   "dotnet",
+  "member",
+  "route",
+  "java",
+  "apktool",
 ];
 async function api(path, data) {
   const response = await fetch(
@@ -95,6 +102,16 @@ function inputFor(action) {
       ilspy: $("ilspy").value.trim(),
       dotnet: $("dotnet").value.trim(),
     });
+  if (["deep", "extract"].includes(action)) {
+    if ($("member").value.trim()) input.assembly = $("member").value.trim();
+    if (action === "deep") input.route = $("route").value;
+  }
+  if (action === "apk")
+    Object.assign(input, {
+      output: $("output").value.trim(),
+      java: $("java").value.trim(),
+      apktool: $("apktool").value.trim(),
+    });
   if (["verify", "pipeline"].includes(action))
     Object.assign(input, {
       original: {
@@ -112,7 +129,16 @@ function inputFor(action) {
   return input;
 }
 function setBusy(busy) {
-  for (const id of ["analyze", "restore", "verify", "pipeline", "resume"])
+  for (const id of [
+    "analyze",
+    "restore",
+    "verify",
+    "pipeline",
+    "resume",
+    "deep",
+    "extract",
+    "apk",
+  ])
     $(id).disabled =
       busy ||
       (config?.platform === "win32" && ["verify", "pipeline"].includes(id));
@@ -187,6 +213,22 @@ function renderJob(job) {
   }
   if (r?.plan)
     addMetric("원본 정체성 보관됨", `SHA-256 ${r.plan.target.sha256}`);
+  if (r?.extract)
+    addMetric(
+      "배포 파일 추출 완료",
+      r.extract.normalized_result.output_root +
+        " · 원본 소스 복원/빌드 판정 아님",
+    );
+  if (r?.deep)
+    addMetric(
+      "정밀 분석 기록 보관됨",
+      r.deep.evidence_path + " · 정적 분석 범위",
+    );
+  if (r?.apk)
+    addMetric(
+      "APK 복원 · 재빌드 완료 (미서명)",
+      r.apk.rebuilt.path + " · 기기 실행 미검증",
+    );
   if (r?.recovery)
     addMetric(
       "C# 프로젝트 복원 · 빌드 완료",
@@ -231,6 +273,9 @@ function renderResult() {
               project: r.plan?.target.path,
               revision: r.plan?.revision,
               rebuild: r.recovery?.status,
+              deep: r.deep,
+              extraction: r.extract,
+              apk: r.apk,
               output: r.rebuilt_directory,
               inventory: r.inventory,
               execution_observations: r.execution_observations,
@@ -284,8 +329,14 @@ async function history() {
         ilspy: "ilspy",
         dotnet: "dotnet",
         cwd: "cwd",
+        route: "route",
+        java: "java",
+        apktool: "apktool",
       }))
         if (job.input[key]) $(id).value = job.input[key];
+      $("member").value = ["deep", "extract"].includes(job.input.action)
+        ? job.input.assembly || ""
+        : "";
       for (const side of ["original", "candidate"])
         if (job.input[side]) {
           $(side).value = job.input[side].executable;
@@ -384,6 +435,8 @@ $("tools-save").onclick = async () => {
     await api("/api/settings", {
       ilspy: $("ilspy").value,
       dotnet: $("dotnet").value,
+      java: $("java").value,
+      apktool: $("apktool").value,
     });
   } catch (error) {
     toast(error.message);
@@ -394,7 +447,16 @@ $("tools-save").onclick = async () => {
   $("tools-dialog").close();
   toast("도구 경로를 저장했습니다.");
 };
-for (const action of ["analyze", "resume", "restore", "verify", "pipeline"])
+for (const action of [
+  "analyze",
+  "resume",
+  "restore",
+  "verify",
+  "pipeline",
+  "deep",
+  "extract",
+  "apk",
+])
   $(action).onclick = () => start(action);
 $("cancel").onclick = async () => {
   try {
@@ -441,6 +503,8 @@ async function init() {
   $("cwd").value = config.home;
   $("ilspy").value = config.settings.ilspy || "";
   $("dotnet").value = config.settings.dotnet || "";
+  $("java").value = config.settings.java || "";
+  $("apktool").value = config.settings.apktool || "";
   try {
     const saved = JSON.parse(localStorage.getItem("rea-ui-form") || "{}");
     for (const id of formIds) if (saved[id]) $(id).value = saved[id];

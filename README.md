@@ -3,7 +3,7 @@
 
 <img src="docs/assets/personal-rea-banner.svg" alt="Personal REA — 배포된 앱에서 근거를 찾고, 복원 결과를 검증합니다" width="1200" />
 
-**앱 분석 · 증거 저장 · 기능 비교 · .NET 프로젝트 복원**
+**앱 분석 · 패키지 추출 · APK 재빌드 · .NET 프로젝트 복원**
 
 **Workbench 0.2.0** · REA 엔진 6.7.0 기반 · MIT License
 
@@ -31,11 +31,13 @@
 
 ## 로컬 UI로 사용하기
 
-**Personal REA Local Studio**에서 파일 선택 → 분석 → .NET 복원·빌드 → 실행 비교를 한 화면에서 진행합니다.
+**Personal REA Local Studio**에서 파일 선택 → 정밀 분석 → 패키지 추출 / APK·.NET 복원·빌드를 진행합니다. .NET 앱은 실행 비교까지 이어집니다.
 Mac에 설치된 **Personal REA.app** 또는 `rea-ui`로 열 수 있습니다.
 소스 checkout에서는 빌드 후 `node personal/ui/launcher.mjs`를 실행합니다.
 
-[로컬 UI 사용 설명서](docs/personal-rea-ui.md) · 실제 단계·로그·증거·실패 상태를 표시합니다.
+[로컬 UI 사용 설명서](docs/personal-rea-ui.md) · [형식별 복원 범위와 도구 조사](docs/personal-reconstruction-scope.md)
+
+DMG·ASAR 파일 추출, Ghidra/JADX/JavaScript 정밀 분석, Apktool 기반 미서명 APK 재빌드를 지원합니다. 추출·재빌드·실행 검증의 상태를 따로 표시합니다.
 
 ## 빠른 시작
 
